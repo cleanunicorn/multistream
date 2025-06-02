@@ -1,0 +1,35 @@
+# Multistream Configuration Example
+# Copy this file to config.yaml and update with your settings
+
+platforms:
+  twitch:
+    enabled: true
+    rtmpUrl: rtmp://live.twitch.tv/live
+    streamKey: your_twitch_stream_key_here
+    settings:
+      # Add any platform-specific settings here
+      
+  youtube:
+    enabled: true
+    rtmpUrl: rtmp://a.rtmp.youtube.com/live2
+    streamKey: your_youtube_stream_key_here
+    settings:
+      # Add any platform-specific settings here
+      
+  kick:
+    enabled: false
+    rtmpUrl: rtmp://fa723fc1b171.global-contribute.live-video.net/live
+    streamKey: your_kick_stream_key_here
+    settings:
+      # Add any platform-specific settings here
+
+server:
+  rtmpPort: 1935
+  httpPort: 8000
+
+# You can add more platforms by following the same structure
+# custom_platform:
+#   enabled: false
+#   rtmpUrl: rtmp://custom.platform.com/live
+#   streamKey: your_key_here
+#   settings: {}
