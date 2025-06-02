@@ -1,6 +1,8 @@
 import ffmpeg from 'fluent-ffmpeg';
 import logger from '../utils/logger.js';
 import { loadConfig } from '../config/config.js';
+import fs from 'fs';
+import path from 'path';
 
 export class StreamManager {
   constructor() {
@@ -28,6 +30,14 @@ export class StreamManager {
         ffmpegCommands.push({ platform, command });
       }
     });
+
+    // Add recording if enabled
+    if (this.config.recording.enabled) {
+      const recordingCommand = this.createRecordingCommand(inputUrl, streamKey);
+      if (recordingCommand) {
+        ffmpegCommands.push({ platform: 'recording', command: recordingCommand });
+      }
+    }
 
     this.activeStreams.set(streamKey, ffmpegCommands);
     logger.info(`Started restreaming to ${ffmpegCommands.length} platforms`);
@@ -107,5 +117,43 @@ export class StreamManager {
       });
     });
     return streams;
+  }
+
+  createRecordingCommand(inputUrl, streamKey) {
+    // Create recordings directory if it doesn't exist
+    const recordingPath = path.resolve(this.config.recording.path);
+    if (!fs.existsSync(recordingPath)) {
+      fs.mkdirSync(recordingPath, { recursive: true });
+      logger.info(`Created recording directory: ${recordingPath}`);
+    }
+
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `${streamKey}_${timestamp}.${this.config.recording.format}`;
+    const outputPath = path.join(recordingPath, filename);
+
+    const command = ffmpeg(inputUrl)
+      .inputOptions([
+        '-re'
+      ])
+      .outputOptions([
+        '-c:v', 'copy',
+        '-c:a', 'copy',
+        '-movflags', '+faststart'
+      ])
+      .output(outputPath)
+      .on('start', (cmd) => {
+        logger.info(`Recording started: ${outputPath}`);
+        logger.debug(`Recording FFmpeg command:`, cmd);
+      })
+      .on('error', (err) => {
+        logger.error(`Recording error:`, err);
+      })
+      .on('end', () => {
+        logger.info(`Recording completed: ${outputPath}`);
+      });
+
+    command.run();
+    return command;
   }
 }

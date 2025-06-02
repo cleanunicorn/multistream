@@ -30,6 +30,11 @@ const defaultConfig = {
     rtmpPort: 1935,
     httpStreamingPort: 9000,
     apiPort: 8000
+  },
+  recording: {
+    enabled: false,
+    path: './recordings',
+    format: 'mp4'
   }
 };
 
@@ -44,19 +49,40 @@ export function loadConfig() {
   }
   
   // Override with environment variables
+  // Twitch
+  if (process.env.ENABLE_TWITCH !== undefined) {
+    config.platforms.twitch.enabled = process.env.ENABLE_TWITCH === 'true';
+  }
   if (process.env.TWITCH_STREAM_KEY) {
     config.platforms.twitch.streamKey = process.env.TWITCH_STREAM_KEY;
-    config.platforms.twitch.enabled = true;
+    // Only auto-enable if not explicitly disabled
+    if (process.env.ENABLE_TWITCH === undefined) {
+      config.platforms.twitch.enabled = true;
+    }
   }
   
+  // YouTube
+  if (process.env.ENABLE_YOUTUBE !== undefined) {
+    config.platforms.youtube.enabled = process.env.ENABLE_YOUTUBE === 'true';
+  }
   if (process.env.YOUTUBE_STREAM_KEY) {
     config.platforms.youtube.streamKey = process.env.YOUTUBE_STREAM_KEY;
-    config.platforms.youtube.enabled = true;
+    // Only auto-enable if not explicitly disabled
+    if (process.env.ENABLE_YOUTUBE === undefined) {
+      config.platforms.youtube.enabled = true;
+    }
   }
   
+  // Kick
+  if (process.env.ENABLE_KICK !== undefined) {
+    config.platforms.kick.enabled = process.env.ENABLE_KICK === 'true';
+  }
   if (process.env.KICK_STREAM_KEY) {
     config.platforms.kick.streamKey = process.env.KICK_STREAM_KEY;
-    config.platforms.kick.enabled = true;
+    // Only auto-enable if not explicitly disabled
+    if (process.env.ENABLE_KICK === undefined) {
+      config.platforms.kick.enabled = true;
+    }
   }
   
   // Override RTMP URLs if provided
@@ -83,6 +109,19 @@ export function loadConfig() {
   
   if (process.env.API_PORT) {
     config.server.apiPort = parseInt(process.env.API_PORT);
+  }
+  
+  // Recording config
+  if (process.env.ENABLE_RECORDING) {
+    config.recording.enabled = process.env.ENABLE_RECORDING === 'true';
+  }
+  
+  if (process.env.RECORDING_PATH) {
+    config.recording.path = process.env.RECORDING_PATH;
+  }
+  
+  if (process.env.RECORDING_FORMAT) {
+    config.recording.format = process.env.RECORDING_FORMAT;
   }
   
   return config;
