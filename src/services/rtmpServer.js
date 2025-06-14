@@ -1,20 +1,22 @@
 import NodeMediaServer from 'node-media-server';
 import { StreamManager } from './streamManager.js';
 import logger from '../utils/logger.js';
+import { loadConfig } from '../config/config.js';
 
 export function createRTMPServer() {
+  const appConfig = loadConfig();
   const streamManager = new StreamManager();
   
   const config = {
     rtmp: {
-      port: parseInt(process.env.RTMP_PORT) || 1935,
+      port: appConfig.server.rtmpPort,
       chunk_size: 60000,
       gop_cache: true,
       ping: 30,
       ping_timeout: 60
     },
     http: {
-      port: parseInt(process.env.HTTP_STREAMING_PORT) || 9000,
+      port: appConfig.server.httpStreamingPort,
       allow_origin: '*'
     }
   };
@@ -35,5 +37,5 @@ export function createRTMPServer() {
     logger.info(`Stream play request: ${StreamPath}`);
   });
 
-  return nms;
+  return { nms, streamManager };
 }

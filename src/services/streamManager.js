@@ -1,6 +1,6 @@
 import ffmpeg from 'fluent-ffmpeg';
 import logger from '../utils/logger.js';
-import { loadConfig } from '../config/config.js';
+import { loadConfig, configEvents } from '../config/config.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -8,6 +8,11 @@ export class StreamManager {
   constructor() {
     this.activeStreams = new Map();
     this.config = loadConfig();
+    
+    // Listen for config changes
+    configEvents.on('configReloaded', (newConfig) => {
+      this.handleConfigReload(newConfig);
+    });
   }
 
   startStream(streamPath, args) {
@@ -68,6 +73,11 @@ export class StreamManager {
     
     if (!platformConfig || !platformConfig.enabled || !platformConfig.streamKey) {
       return null;
+    }
+
+    // Special handling for browser_debug platform
+    if (platform === 'browser_debug') {
+      return this.createBrowserDebugCommand(inputUrl);
     }
 
     const outputUrl = `${platformConfig.rtmpUrl}/${platformConfig.streamKey}`;
@@ -155,5 +165,101 @@ export class StreamManager {
 
     command.run();
     return command;
+  }
+
+  createBrowserDebugCommand(inputUrl) {
+    const outputUrl = `http://localhost:${this.config.server.httpStreamingPort}/live/stream.flv`;
+    
+    const command = ffmpeg(inputUrl)
+      .inputOptions([
+        '-re'
+      ])
+      .outputOptions([
+        '-c:v', 'copy',
+        '-c:a', 'copy',
+        '-f', 'flv',
+        '-flvflags', 'no_duration_filesize'
+      ])
+      .output(outputUrl)
+      .on('start', (cmd) => {
+        logger.info(`Browser debug stream started`);
+        logger.debug(`Browser debug FFmpeg command:`, cmd);
+      })
+      .on('error', (err) => {
+        logger.error(`Browser debug stream error:`, err);
+      })
+      .on('end', () => {
+        logger.info(`Browser debug stream ended`);
+      });
+
+    command.run();
+    return command;
+  }
+
+  handleConfigReload(newConfig) {
+    logger.info('Handling configuration reload in StreamManager');
+    
+    const oldConfig = this.config;
+    this.config = newConfig;
+    
+    // Check each active stream
+    this.activeStreams.forEach((commands, streamKey) => {
+      const streamPath = `/live/${streamKey}`;
+      
+      // Find platforms that changed state
+      const platformsToStop = [];
+      const platformsToStart = [];
+      
+      Object.keys(newConfig.platforms).forEach(platform => {
+        const wasEnabled = oldConfig.platforms[platform]?.enabled && oldConfig.platforms[platform]?.streamKey;
+        const isEnabled = newConfig.platforms[platform]?.enabled && newConfig.platforms[platform]?.streamKey;
+        
+        if (wasEnabled && !isEnabled) {
+          // Platform was disabled
+          platformsToStop.push(platform);
+        } else if (!wasEnabled && isEnabled) {
+          // Platform was enabled
+          platformsToStart.push(platform);
+        } else if (wasEnabled && isEnabled) {
+          // Check if settings changed
+          const oldSettings = JSON.stringify(oldConfig.platforms[platform]);
+          const newSettings = JSON.stringify(newConfig.platforms[platform]);
+          
+          if (oldSettings !== newSettings) {
+            platformsToStop.push(platform);
+            platformsToStart.push(platform);
+          }
+        }
+      });
+      
+      // Stop changed platforms
+      const remainingCommands = commands.filter(({ platform, command }) => {
+        if (platformsToStop.includes(platform)) {
+          try {
+            command.kill('SIGINT');
+            logger.info(`Stopped ${platform} stream due to config change`);
+          } catch (error) {
+            logger.error(`Error stopping ${platform} stream:`, error);
+          }
+          return false;
+        }
+        return true;
+      });
+      
+      // Start new platforms
+      const inputUrl = `rtmp://localhost:1935${streamPath}`;
+      platformsToStart.forEach(platform => {
+        const command = this.createFFmpegCommand(inputUrl, platform);
+        if (command) {
+          remainingCommands.push({ platform, command });
+          logger.info(`Started ${platform} stream due to config change`);
+        }
+      });
+      
+      // Update the active streams map
+      this.activeStreams.set(streamKey, remainingCommands);
+      
+      logger.info(`Configuration reload complete. Active platforms: ${remainingCommands.map(c => c.platform).join(', ')}`);
+    });
   }
 }

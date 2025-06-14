@@ -9,7 +9,8 @@ A Node.js RTMP server that receives streams from OBS and restreams them to multi
 - 🎮 Support for Twitch, YouTube, Kick (easily extensible)
 - 🌐 Web dashboard for monitoring
 - 🐳 Docker support
-- 🔧 Configuration via environment variables or YAML
+- 🔧 Configuration via YAML file
+- 🔍 Browser debug mode to preview streams in the dashboard
 
 ## Quick Start
 
@@ -22,8 +23,8 @@ A Node.js RTMP server that receives streams from OBS and restreams them to multi
 
 2. **Configure your stream keys:**
    ```bash
-   cp .env.example .env
-   # Edit .env with your stream keys
+   cp config.example.yaml config.yaml
+   # Edit config.yaml with your stream keys
    ```
 
 3. **Start the server:**
@@ -53,19 +54,6 @@ A Node.js RTMP server that receives streams from OBS and restreams them to multi
 
 ## Configuration
 
-### Environment Variables (.env)
-
-```env
-# RTMP Server Configuration
-RTMP_PORT=1935
-HTTP_PORT=8000
-
-# Streaming Platforms
-TWITCH_STREAM_KEY=your_twitch_stream_key
-YOUTUBE_STREAM_KEY=your_youtube_stream_key
-KICK_STREAM_KEY=your_kick_stream_key
-```
-
 ### YAML Configuration (config.yaml)
 
 ```yaml
@@ -79,7 +67,33 @@ platforms:
     enabled: true
     rtmpUrl: rtmp://a.rtmp.youtube.com/live2
     streamKey: your_youtube_stream_key
+    
+  kick:
+    enabled: false
+    rtmpUrl: rtmps://fa723fc1b171.global-contribute.live-video.net/live
+    streamKey: your_kick_stream_key
+
+server:
+  rtmpPort: 1935
+  httpStreamingPort: 9000
+  apiPort: 8000
+
+recording:
+  enabled: false
+  path: ./recordings
+  format: mp4
 ```
+
+### Browser Debug Mode
+
+The `browser_debug` platform allows you to preview your stream directly in the web dashboard. When enabled, you can view your stream at `http://localhost:8000` (or `http://YOUR_IP:8000` from other devices on your network) in the Debug Stream Player section. This is useful for:
+
+- Testing your stream setup without going live
+- Monitoring stream quality and latency
+- Debugging encoding issues
+- Viewing the stream from multiple devices (phones, tablets, other computers)
+
+**Note**: The server will log your network IP addresses on startup for easy remote access.
 
 ## Adding Custom Platforms
 

@@ -23,6 +23,13 @@ platforms:
     settings:
       # Add any platform-specific settings here
 
+  browser_debug:
+    enabled: true
+    rtmpUrl: local
+    streamKey: debug
+    settings:
+      # This platform streams to the local HTTP server for browser playback
+      httpPath: /live/stream.flv
 server:
   rtmpPort: 1935
   httpPort: 8000

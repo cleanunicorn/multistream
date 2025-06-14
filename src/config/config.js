@@ -2,8 +2,13 @@ import fs from 'fs';
 import yaml from 'yaml';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { EventEmitter } from 'events';
+import logger from '../utils/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Event emitter for config changes
+export const configEvents = new EventEmitter();
 
 const defaultConfig = {
   platforms: {
@@ -46,82 +51,8 @@ export function loadConfig() {
   if (fs.existsSync(configPath)) {
     const yamlConfig = yaml.parse(fs.readFileSync(configPath, 'utf8'));
     config = mergeConfig(config, yamlConfig);
-  }
-  
-  // Override with environment variables
-  // Twitch
-  if (process.env.ENABLE_TWITCH !== undefined) {
-    config.platforms.twitch.enabled = process.env.ENABLE_TWITCH === 'true';
-  }
-  if (process.env.TWITCH_STREAM_KEY) {
-    config.platforms.twitch.streamKey = process.env.TWITCH_STREAM_KEY;
-    // Only auto-enable if not explicitly disabled
-    if (process.env.ENABLE_TWITCH === undefined) {
-      config.platforms.twitch.enabled = true;
-    }
-  }
-  
-  // YouTube
-  if (process.env.ENABLE_YOUTUBE !== undefined) {
-    config.platforms.youtube.enabled = process.env.ENABLE_YOUTUBE === 'true';
-  }
-  if (process.env.YOUTUBE_STREAM_KEY) {
-    config.platforms.youtube.streamKey = process.env.YOUTUBE_STREAM_KEY;
-    // Only auto-enable if not explicitly disabled
-    if (process.env.ENABLE_YOUTUBE === undefined) {
-      config.platforms.youtube.enabled = true;
-    }
-  }
-  
-  // Kick
-  if (process.env.ENABLE_KICK !== undefined) {
-    config.platforms.kick.enabled = process.env.ENABLE_KICK === 'true';
-  }
-  if (process.env.KICK_STREAM_KEY) {
-    config.platforms.kick.streamKey = process.env.KICK_STREAM_KEY;
-    // Only auto-enable if not explicitly disabled
-    if (process.env.ENABLE_KICK === undefined) {
-      config.platforms.kick.enabled = true;
-    }
-  }
-  
-  // Override RTMP URLs if provided
-  if (process.env.TWITCH_RTMP_URL) {
-    config.platforms.twitch.rtmpUrl = process.env.TWITCH_RTMP_URL;
-  }
-  
-  if (process.env.YOUTUBE_RTMP_URL) {
-    config.platforms.youtube.rtmpUrl = process.env.YOUTUBE_RTMP_URL;
-  }
-  
-  if (process.env.KICK_RTMP_URL) {
-    config.platforms.kick.rtmpUrl = process.env.KICK_RTMP_URL;
-  }
-  
-  // Server config
-  if (process.env.RTMP_PORT) {
-    config.server.rtmpPort = parseInt(process.env.RTMP_PORT);
-  }
-  
-  if (process.env.HTTP_STREAMING_PORT) {
-    config.server.httpStreamingPort = parseInt(process.env.HTTP_STREAMING_PORT);
-  }
-  
-  if (process.env.API_PORT) {
-    config.server.apiPort = parseInt(process.env.API_PORT);
-  }
-  
-  // Recording config
-  if (process.env.ENABLE_RECORDING) {
-    config.recording.enabled = process.env.ENABLE_RECORDING === 'true';
-  }
-  
-  if (process.env.RECORDING_PATH) {
-    config.recording.path = process.env.RECORDING_PATH;
-  }
-  
-  if (process.env.RECORDING_FORMAT) {
-    config.recording.format = process.env.RECORDING_FORMAT;
+  } else {
+    throw new Error('config.yaml not found. Please create a config.yaml file based on config.example.yaml');
   }
   
   return config;
@@ -139,4 +70,43 @@ function mergeConfig(target, source) {
   }
   
   return result;
+}
+
+// Store current config
+let currentConfig = null;
+
+// Watch config file for changes
+export function watchConfig() {
+  const configPath = path.join(process.cwd(), 'config.yaml');
+  
+  let fsWait = false;
+  fs.watchFile(configPath, { interval: 1000 }, (curr, prev) => {
+    if (fsWait) return;
+    fsWait = true;
+    
+    setTimeout(() => {
+      fsWait = false;
+      
+      try {
+        const newConfig = loadConfig();
+        
+        // Check if config actually changed
+        if (JSON.stringify(newConfig) !== JSON.stringify(currentConfig)) {
+          logger.info('Configuration file changed, reloading...');
+          currentConfig = newConfig;
+          configEvents.emit('configReloaded', newConfig);
+        }
+      } catch (error) {
+        logger.error('Error reloading configuration:', error);
+      }
+    }, 100);
+  });
+  
+  logger.info('Watching config.yaml for changes...');
+}
+
+// Initialize current config
+export function initConfig() {
+  currentConfig = loadConfig();
+  return currentConfig;
 }

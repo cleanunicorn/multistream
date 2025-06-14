@@ -7,14 +7,9 @@ services:
     ports:
       - "1935:1935"    # RTMP port
       - "8000:8000"    # HTTP API/Dashboard port
-    environment:
-      - RTMP_PORT=1935
-      - HTTP_PORT=8000
-      # Add your stream keys here or use a .env file
-      # - TWITCH_STREAM_KEY=your_twitch_key
-      # - YOUTUBE_STREAM_KEY=your_youtube_key
-      # - KICK_STREAM_KEY=your_kick_key
+      - "9000:9000"    # HTTP Streaming port
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./logs:/app/logs
+      - ./recordings:/app/recordings
     restart: unless-stopped
