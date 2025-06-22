@@ -2,6 +2,9 @@ import express from 'express';
 import logger from '../utils/logger.js';
 import { loadConfig, configEvents } from '../config/config.js';
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import fs from 'fs';
+import path from 'path';
+import yaml from 'yaml';
 
 let streamManager = null;
 
@@ -88,6 +91,54 @@ export function createAPIServer(streamManagerInstance) {
     }
   });
   
+  // Toggle platform enabled/disabled status
+  app.post('/api/platforms/:platform/toggle', async (req, res) => {
+    try {
+      const { platform } = req.params;
+      const config = loadConfig();
+      
+      // Check if platform exists
+      if (!config.platforms[platform]) {
+        return res.status(404).json({
+          success: false,
+          message: `Platform ${platform} not found`
+        });
+      }
+      
+      // Read current config file
+      const configPath = path.join(process.cwd(), 'config.yaml');
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const yamlConfig = yaml.parse(configContent);
+      
+      // Toggle the platform status
+      yamlConfig.platforms[platform].enabled = !yamlConfig.platforms[platform].enabled;
+      
+      // Write back to file
+      const updatedYaml = yaml.stringify(yamlConfig, { 
+        indent: 2,
+        lineWidth: 0 
+      });
+      fs.writeFileSync(configPath, updatedYaml);
+      
+      logger.info(`Platform ${platform} toggled to ${yamlConfig.platforms[platform].enabled ? 'enabled' : 'disabled'}`);
+      
+      // The file watcher will automatically trigger a config reload
+      res.json({
+        success: true,
+        platform,
+        enabled: yamlConfig.platforms[platform].enabled,
+        message: `Platform ${platform} ${yamlConfig.platforms[platform].enabled ? 'enabled' : 'disabled'}`
+      });
+    } catch (error) {
+      logger.error('Failed to toggle platform:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to toggle platform',
+        error: error.message
+      });
+    }
+  });
+  
   // Simple dashboard
   app.get('/', (req, res) => {
     res.send(`
@@ -126,8 +177,59 @@ export function createAPIServer(streamManagerInstance) {
             justify-content: space-between;
             align-items: center;
           }
+          .platform-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+          }
           .enabled { color: #28a745; font-weight: bold; }
           .disabled { color: #dc3545; }
+          .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+          }
+          .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+          }
+          .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+          }
+          .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+          }
+          input:checked + .toggle-slider {
+            background-color: #28a745;
+          }
+          input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+          }
+          .toggle-switch.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+          .toggle-switch.disabled .toggle-slider {
+            cursor: not-allowed;
+          }
           code {
             background-color: #f4f4f4;
             padding: 2px 6px;
@@ -272,12 +374,25 @@ export function createAPIServer(streamManagerInstance) {
                 const displayName = name.split('_').map(word => 
                   word.charAt(0).toUpperCase() + word.slice(1)
                 ).join(' ');
+                
+                const hasKey = platform.hasKey || name === 'browser_debug';
+                const canToggle = hasKey;
+                
                 div.innerHTML = \`
-                  <span>\${displayName}</span>
-                  <span class="\${platform.enabled ? 'enabled' : 'disabled'}">
-                    \${platform.enabled ? '✓ Enabled' : '✗ Disabled'}
-                    \${platform.hasKey ? '' : ' (No key configured)'}
-                  </span>
+                  <div class="platform-info">
+                    <span>\${displayName}</span>
+                    <span class="\${platform.enabled ? 'enabled' : 'disabled'}">
+                      \${platform.enabled ? '✓ Enabled' : '✗ Disabled'}
+                      \${!hasKey ? ' (No key configured)' : ''}
+                    </span>
+                  </div>
+                  <label class="toggle-switch \${canToggle ? '' : 'disabled'}">
+                    <input type="checkbox" 
+                           \${platform.enabled ? 'checked' : ''} 
+                           \${canToggle ? '' : 'disabled'}
+                           onchange="togglePlatform('\${name}', this)">
+                    <span class="toggle-slider"></span>
+                  </label>
                 \`;
                 platformsDiv.appendChild(div);
               });
@@ -402,6 +517,38 @@ export function createAPIServer(streamManagerInstance) {
               content.classList.remove('expanded');
               content.classList.add('collapsed');
               header.classList.add('collapsed');
+            }
+          }
+          
+          // Toggle platform enabled/disabled
+          async function togglePlatform(platformName, checkbox) {
+            // Disable the checkbox during the request
+            checkbox.disabled = true;
+            
+            try {
+              const response = await fetch(\`/api/platforms/\${platformName}/toggle\`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              const result = await response.json();
+              
+              if (!result.success) {
+                // Revert checkbox state on failure
+                checkbox.checked = !checkbox.checked;
+                console.error('Failed to toggle platform:', result.message);
+              }
+              
+              // Reload status to reflect changes
+              setTimeout(loadStatus, 500);
+            } catch (error) {
+              // Revert checkbox state on error
+              checkbox.checked = !checkbox.checked;
+              console.error('Error toggling platform:', error);
+            } finally {
+              checkbox.disabled = false;
             }
           }
           
