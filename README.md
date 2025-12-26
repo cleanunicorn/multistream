@@ -21,6 +21,11 @@ A Node.js RTMP server that receives streams from OBS and restreams them to multi
    npm install
    ```
 
+   Install ffpmeg.
+   ```
+   sudo apt install ffmpeg
+   ```
+
 2. **Configure your stream keys:**
    ```bash
    cp config.example.yaml config.yaml
