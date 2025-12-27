@@ -232,6 +232,24 @@ export class StreamManager {
         }
       });
 
+      // Check for recording changes
+      const oldRec = oldConfig.recording || {};
+      const newRec = newConfig.recording || {};
+      const recWasEnabled = oldRec.enabled;
+      const recIsEnabled = newRec.enabled;
+
+      const recSettingsChanged =
+        oldRec.format !== newRec.format ||
+        oldRec.path !== newRec.path;
+
+      if (recWasEnabled && (!recIsEnabled || recSettingsChanged)) {
+        platformsToStop.push('recording');
+      }
+
+      if (recIsEnabled && (!recWasEnabled || recSettingsChanged)) {
+        platformsToStart.push('recording');
+      }
+
       // Stop changed platforms
       const remainingCommands = commands.filter(({ platform, command }) => {
         if (platformsToStop.includes(platform)) {
@@ -249,7 +267,13 @@ export class StreamManager {
       // Start new platforms
       const inputUrl = `rtmp://localhost:1935${streamPath}`;
       platformsToStart.forEach(platform => {
-        const command = this.createFFmpegCommand(inputUrl, platform);
+        let command;
+        if (platform === 'recording') {
+          command = this.createRecordingCommand(inputUrl, streamKey);
+        } else {
+          command = this.createFFmpegCommand(inputUrl, platform);
+        }
+
         if (command) {
           remainingCommands.push({ platform, command });
           logger.info(`Started ${platform} stream due to config change`);
