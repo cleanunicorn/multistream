@@ -8,7 +8,7 @@ export class StreamManager {
   constructor() {
     this.activeStreams = new Map();
     this.config = loadConfig();
-    
+
     // Listen for config changes
     configEvents.on('configReloaded', (newConfig) => {
       this.handleConfigReload(newConfig);
@@ -17,7 +17,7 @@ export class StreamManager {
 
   startStream(streamPath, args) {
     const streamKey = this.extractStreamKey(streamPath);
-    
+
     if (this.activeStreams.has(streamKey)) {
       logger.warn(`Stream ${streamKey} already active`);
       return;
@@ -28,7 +28,7 @@ export class StreamManager {
 
     // Create ffmpeg commands for each platform
     const platforms = this.getEnabledPlatforms();
-    
+
     platforms.forEach(platform => {
       const command = this.createFFmpegCommand(inputUrl, platform);
       if (command) {
@@ -37,7 +37,7 @@ export class StreamManager {
     });
 
     // Add recording if enabled
-    if (this.config.recording.enabled) {
+    if (this.config.recording && this.config.recording.enabled) {
       const recordingCommand = this.createRecordingCommand(inputUrl, streamKey);
       if (recordingCommand) {
         ffmpegCommands.push({ platform: 'recording', command: recordingCommand });
@@ -51,7 +51,7 @@ export class StreamManager {
   stopStream(streamPath) {
     const streamKey = this.extractStreamKey(streamPath);
     const commands = this.activeStreams.get(streamKey);
-    
+
     if (!commands) {
       return;
     }
@@ -70,7 +70,7 @@ export class StreamManager {
 
   createFFmpegCommand(inputUrl, platform) {
     const platformConfig = this.config.platforms[platform];
-    
+
     if (!platformConfig || !platformConfig.enabled || !platformConfig.streamKey) {
       return null;
     }
@@ -81,7 +81,7 @@ export class StreamManager {
     }
 
     const outputUrl = `${platformConfig.rtmpUrl}/${platformConfig.streamKey}`;
-    
+
     const command = ffmpeg(inputUrl)
       .inputOptions([
         '-re'
@@ -169,7 +169,7 @@ export class StreamManager {
 
   createBrowserDebugCommand(inputUrl) {
     const outputUrl = `http://localhost:${this.config.server.httpStreamingPort}/live/stream.flv`;
-    
+
     const command = ffmpeg(inputUrl)
       .inputOptions([
         '-re'
@@ -198,22 +198,22 @@ export class StreamManager {
 
   handleConfigReload(newConfig) {
     logger.info('Handling configuration reload in StreamManager');
-    
+
     const oldConfig = this.config;
     this.config = newConfig;
-    
+
     // Check each active stream
     this.activeStreams.forEach((commands, streamKey) => {
       const streamPath = `/live/${streamKey}`;
-      
+
       // Find platforms that changed state
       const platformsToStop = [];
       const platformsToStart = [];
-      
+
       Object.keys(newConfig.platforms).forEach(platform => {
         const wasEnabled = oldConfig.platforms[platform]?.enabled && oldConfig.platforms[platform]?.streamKey;
         const isEnabled = newConfig.platforms[platform]?.enabled && newConfig.platforms[platform]?.streamKey;
-        
+
         if (wasEnabled && !isEnabled) {
           // Platform was disabled
           platformsToStop.push(platform);
@@ -224,14 +224,14 @@ export class StreamManager {
           // Check if settings changed
           const oldSettings = JSON.stringify(oldConfig.platforms[platform]);
           const newSettings = JSON.stringify(newConfig.platforms[platform]);
-          
+
           if (oldSettings !== newSettings) {
             platformsToStop.push(platform);
             platformsToStart.push(platform);
           }
         }
       });
-      
+
       // Stop changed platforms
       const remainingCommands = commands.filter(({ platform, command }) => {
         if (platformsToStop.includes(platform)) {
@@ -245,7 +245,7 @@ export class StreamManager {
         }
         return true;
       });
-      
+
       // Start new platforms
       const inputUrl = `rtmp://localhost:1935${streamPath}`;
       platformsToStart.forEach(platform => {
@@ -255,10 +255,10 @@ export class StreamManager {
           logger.info(`Started ${platform} stream due to config change`);
         }
       });
-      
+
       // Update the active streams map
       this.activeStreams.set(streamKey, remainingCommands);
-      
+
       logger.info(`Configuration reload complete. Active platforms: ${remainingCommands.map(c => c.platform).join(', ')}`);
     });
   }

@@ -30,6 +30,12 @@ platforms:
     settings:
       # This platform streams to the local HTTP server for browser playback
       httpPath: /live/stream.flv
+
+  # Virtual platform for local recording
+  # recording:
+  #   enabled: true
+  #   path: ./recordings
+  #   format: mp4
 server:
   rtmpPort: 1935
   httpPort: 8000

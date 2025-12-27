@@ -54,6 +54,23 @@ export function createAPIServer(streamManagerInstance) {
       };
     });
 
+    // Add virtual recording platform
+    if (config.recording) {
+      safeConfig.platforms.recording = {
+        enabled: config.recording.enabled,
+        rtmpUrl: 'Local Recording',
+        hasKey: true,
+        format: config.recording.format || 'mp4'
+      };
+    } else {
+      // Default state if not configured
+      safeConfig.platforms.recording = {
+        enabled: false,
+        rtmpUrl: 'Local Recording',
+        hasKey: true
+      };
+    }
+
     res.json(safeConfig);
   });
 
@@ -91,11 +108,84 @@ export function createAPIServer(streamManagerInstance) {
     }
   });
 
+  // Update recording configuration
+  app.post('/api/recording/config', (req, res) => {
+    try {
+      const { format } = req.body;
+      const validFormats = ['mp4', 'mkv', 'flv'];
+
+      if (!validFormats.includes(format)) {
+        return res.status(400).json({ error: 'Invalid format' });
+      }
+
+      const configPath = path.join(process.cwd(), 'config.yaml');
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const yamlConfig = yaml.parse(configContent);
+
+      if (!yamlConfig.recording) {
+        yamlConfig.recording = { enabled: true, path: './recordings' };
+      }
+
+      yamlConfig.recording.format = format;
+
+      // Write back
+      const updatedYaml = yaml.stringify(yamlConfig, {
+        indent: 2,
+        lineWidth: 0
+      });
+      fs.writeFileSync(configPath, updatedYaml);
+
+      logger.info(`Recording format updated to ${format}`);
+
+      res.json({ success: true, format });
+    } catch (error) {
+      logger.error('Failed to update recording config:', error);
+      res.status(500).json({ error: 'Failed to update configuration' });
+    }
+  });
+
   // Toggle platform enabled/disabled status
   app.post('/api/platforms/:platform/toggle', async (req, res) => {
     try {
       const { platform } = req.params;
       const config = loadConfig();
+
+      // Special handling for virtual recording platform
+      if (platform === 'recording') {
+        const config = loadConfig();
+        const configPath = path.join(process.cwd(), 'config.yaml');
+        const configContent = fs.readFileSync(configPath, 'utf8');
+        const yamlConfig = yaml.parse(configContent);
+
+        // Initialize recording config if missing
+        if (!yamlConfig.recording) {
+          yamlConfig.recording = {
+            enabled: true, // Default to true so the toggle disables it
+            path: './recordings',
+            format: 'mp4'
+          };
+        }
+
+        // Toggle
+        yamlConfig.recording.enabled = !yamlConfig.recording.enabled;
+
+        // Write back
+        const updatedYaml = yaml.stringify(yamlConfig, {
+          indent: 2,
+          lineWidth: 0
+        });
+        fs.writeFileSync(configPath, updatedYaml);
+
+        const isEnabled = yamlConfig.recording.enabled;
+        logger.info(`Recording toggled to ${isEnabled ? 'enabled' : 'disabled'}`);
+
+        return res.json({
+          success: true,
+          platform,
+          enabled: isEnabled,
+          message: `Recording ${isEnabled ? 'enabled' : 'disabled'}`
+        });
+      }
 
       // Check if platform exists
       if (!config.platforms[platform]) {
@@ -138,6 +228,348 @@ export function createAPIServer(streamManagerInstance) {
       });
     }
   });
+
+  // Serve recordings static files
+  const recordingPath = config.recording && config.recording.path ?
+    path.resolve(process.cwd(), config.recording.path) :
+    path.join(process.cwd(), 'recordings');
+
+  if (!fs.existsSync(recordingPath)) {
+    fs.mkdirSync(recordingPath, { recursive: true });
+  }
+
+  app.use('/recordings-files', express.static(recordingPath));
+
+  // Get list of recordings
+  app.get('/api/recordings', (req, res) => {
+    try {
+      const recPath = config.recording && config.recording.path ?
+        path.resolve(process.cwd(), config.recording.path) :
+        path.join(process.cwd(), 'recordings');
+
+      if (!fs.existsSync(recPath)) {
+        return res.json({ files: [] });
+      }
+
+      const files = fs.readdirSync(recPath)
+        .filter(file => !file.startsWith('.')) // Skip hidden files
+        .map(file => {
+          const stats = fs.statSync(path.join(recPath, file));
+          return {
+            name: file,
+            size: stats.size,
+            created: stats.birthtime,
+            url: `/recordings-files/${file}`
+          };
+        })
+        .sort((a, b) => b.created - a.created); // Newest first
+
+      res.json({ files });
+    } catch (error) {
+      logger.error('Error listing recordings:', error);
+      res.status(500).json({ error: 'Failed to list recordings' });
+    }
+  });
+
+  // Delete recording
+  app.delete('/api/recordings/:filename', (req, res) => {
+    try {
+      const { filename } = req.params;
+
+      // Basic security check to prevent directory traversal
+      if (filename.includes('..') || filename.includes('/')) {
+        return res.status(400).json({ error: 'Invalid filename' });
+      }
+
+      const recPath = config.recording && config.recording.path ?
+        path.resolve(process.cwd(), config.recording.path) :
+        path.join(process.cwd(), 'recordings');
+
+      const filePath = path.join(recPath, filename);
+
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+
+      fs.unlinkSync(filePath);
+      logger.info(`Deleted recording: ${filename}`);
+
+      res.json({ success: true, message: 'File deleted' });
+    } catch (error) {
+      logger.error('Error deleting recording:', error);
+      res.status(500).json({ error: 'Failed to delete recording' });
+    }
+  });
+
+  // Recordings page
+  app.get('/recordings', (req, res) => {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Recordings - Multistream Server</title>
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            padding: 20px;
+            background-color: #f0f0f0;
+          }
+          .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          h1 { color: #333; display: flex; align-items: center; justify-content: space-between; }
+          .back-link {
+            font-size: 16px;
+            text-decoration: none;
+            color: #0099cc;
+            border: 1px solid #0099cc;
+            padding: 5px 15px;
+            border-radius: 4px;
+          }
+          .back-link:hover {
+            background-color: #e8f4f8;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+          th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+          }
+          th {
+            background-color: #f8f9fa;
+            color: #666;
+            font-weight: 600;
+          }
+          tr:hover {
+            background-color: #f8f8f8;
+          }
+          .actions {
+            display: flex;
+            gap: 10px;
+          }
+          .btn {
+            padding: 5px 10px;
+            border-radius: 3px;
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+          }
+          .btn-primary {
+            background-color: #0099cc;
+            color: white;
+          }
+          .btn-primary:hover {
+            background-color: #007aa3;
+          }
+          .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+          }
+          .btn-secondary:hover {
+            background-color: #5a6268;
+          }
+          .btn-danger {
+            background-color: #dc3545;
+            color: white;
+          }
+          .btn-danger:hover {
+            background-color: #c82333;
+          }
+          .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-style: italic;
+          }
+          .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+          }
+          .modal-content {
+            background-color: black;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 90%;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+          }
+          .modal-header {
+            display: flex;
+            justify-content: space-between;
+            color: white;
+          }
+          .close-modal {
+            color: #ccc;
+            cursor: pointer;
+            font-size: 24px;
+          }
+          .close-modal:hover {
+            color: white;
+          }
+          video {
+            max-width: 100%;
+            max-height: 80vh;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>
+            Recordings
+            <a href="/" class="back-link">← Back to Dashboard</a>
+          </h1>
+          
+          <div id="fileList">Loading...</div>
+          
+          <div id="videoModal" class="modal">
+            <div class="modal-content">
+              <div class="modal-header">
+                <span id="videoTitle">Playing...</span>
+                <span class="close-modal" onclick="closeModal()">&times;</span>
+              </div>
+              <video id="player" controls></video>
+            </div>
+          </div>
+        </div>
+        
+        <script>
+          async function loadFiles() {
+            try {
+              const response = await fetch('/api/recordings');
+              const data = await response.json();
+              
+              const listDiv = document.getElementById('fileList');
+              
+              if (data.files.length === 0) {
+                listDiv.innerHTML = '<div class="empty-state">No recordings found</div>';
+                return;
+              }
+              
+              let html = \`
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Filename</th>
+                      <th>Date</th>
+                      <th>Size</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+              \`;
+              
+              data.files.forEach(file => {
+                const date = new Date(file.created).toLocaleString();
+                const size = formatSize(file.size);
+                
+                html += \`
+                  <tr>
+                    <td>\${file.name}</td>
+                    <td>\${date}</td>
+                    <td>\${size}</td>
+                    <td class="actions">
+                      <button onclick="playVideo('\${file.url}', '\${file.name}')" class="btn btn-primary">Play</button>
+                      <a href="\${file.url}" download class="btn btn-secondary">Download</a>
+                      <button onclick="deleteRecording('\${file.name}')" class="btn btn-danger">Delete</button>
+                    </td>
+                  </tr>
+                \`;
+              });
+              
+              html += '</tbody></table>';
+              listDiv.innerHTML = html;
+            } catch (error) {
+              document.getElementById('fileList').innerHTML = 'Error loading recordings';
+              console.error(error);
+            }
+          }
+          
+          async function deleteRecording(filename) {
+            if (!confirm(\`Are you sure you want to delete \${filename}?\`)) {
+              return;
+            }
+            
+            try {
+              const response = await fetch(\`/api/recordings/\${filename}\`, {
+                method: 'DELETE'
+              });
+              
+              if (response.ok) {
+                loadFiles();
+              } else {
+                alert('Failed to delete file');
+              }
+            } catch (error) {
+              console.error('Error deleting file:', error);
+              alert('Error deleting file');
+            }
+          }
+          
+          function formatSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+          }
+          
+          function playVideo(url, title) {
+            const modal = document.getElementById('videoModal');
+            const video = document.getElementById('player');
+            const titleEl = document.getElementById('videoTitle');
+            
+            titleEl.textContent = title;
+            video.src = url;
+            modal.style.display = 'flex';
+            
+            // Try to play
+            video.play().catch(e => console.error('Play error:', e));
+          }
+          
+          function closeModal() {
+            const modal = document.getElementById('videoModal');
+            const video = document.getElementById('player');
+            
+            video.pause();
+            video.src = '';
+            modal.style.display = 'none';
+          }
+          
+          // Close modal on click outside
+          window.onclick = function(event) {
+            const modal = document.getElementById('videoModal');
+            if (event.target == modal) {
+              closeModal();
+            }
+          }
+          
+          loadFiles();
+        </script>
+      </body>
+      </html>
+    `);
+  });
+
 
   // Simple dashboard
   app.get('/', (req, res) => {
@@ -342,7 +774,10 @@ export function createAPIServer(streamManagerInstance) {
       </head>
       <body>
         <div class="container">
-          <h1>Multistream Server</h1>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <h1>Multistream Server</h1>
+            <a href="/recordings" style="text-decoration: none; background-color: #0099cc; color: white; padding: 8px 15px; border-radius: 4px; font-weight: bold;">View Recordings</a>
+          </div>
           <div class="info-box">
             <h3 class="collapsible collapsed" onclick="toggleCollapse('obsConfig')">OBS Configuration</h3>
             <div id="obsConfig" class="collapsible-content collapsed">
@@ -443,8 +878,15 @@ export function createAPIServer(streamManagerInstance) {
                     <span>\${displayName}</span>
                     <span class="\${platform.enabled ? 'enabled' : 'disabled'}">
                       \${platform.enabled ? '✓ Enabled' : '✗ Disabled'}
-                      \${!hasKey ? ' (No key configured)' : ''}
+                      \${!hasKey && name !== 'recording' ? ' (No key configured)' : ''}
                     </span>
+                    \${name === 'recording' ? \`
+                      <select onchange="updateRecordingFormat(this.value)" style="margin-left: 10px; padding: 2px;">
+                        <option value="mp4" \${platform.format === 'mp4' ? 'selected' : ''}>MP4</option>
+                        <option value="mkv" \${platform.format === 'mkv' ? 'selected' : ''}>MKV</option>
+                        <option value="flv" \${platform.format === 'flv' ? 'selected' : ''}>FLV</option>
+                      </select>
+                    \` : ''}
                   </div>
                   <label class="toggle-switch \${canToggle ? '' : 'disabled'}">
                     <input type="checkbox" 
@@ -468,6 +910,24 @@ export function createAPIServer(streamManagerInstance) {
             } catch (error) {
               console.error(error);
               document.getElementById('platforms').innerHTML = 'Error loading status';
+            }
+          }
+
+          async function updateRecordingFormat(format) {
+            try {
+              constresponse = await fetch('/api/recording/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ format })
+              });
+              
+              if (!response.oks) {
+                alert('Failed to update format');
+                loadStatus(); // Revert UI
+              }
+            } catch (error) {
+              console.error('Error updating format:', error);
+              alert('Error updating format');
             }
           }
           
