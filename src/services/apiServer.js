@@ -915,13 +915,13 @@ export function createAPIServer(streamManagerInstance) {
 
           async function updateRecordingFormat(format) {
             try {
-              constresponse = await fetch('/api/recording/config', {
+              const response = await fetch('/api/recording/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ format })
               });
               
-              if (!response.oks) {
+              if (!response.ok) {
                 alert('Failed to update format');
                 loadStatus(); // Revert UI
               }
