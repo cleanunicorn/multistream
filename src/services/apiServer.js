@@ -12,9 +12,9 @@ export function createAPIServer(streamManagerInstance) {
   const app = express();
   const config = loadConfig();
   streamManager = streamManagerInstance;
-  
+
   app.use(express.json());
-  
+
   // Enable CORS
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -33,19 +33,19 @@ export function createAPIServer(streamManagerInstance) {
       res.status(502).send('Stream proxy error');
     }
   }));
-  
+
   // Health check
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
-  
+
   // Get current configuration (without sensitive data)
   app.get('/api/config', (req, res) => {
     const config = loadConfig();
     const safeConfig = {
       platforms: {}
     };
-    
+
     Object.keys(config.platforms).forEach(platform => {
       safeConfig.platforms[platform] = {
         enabled: config.platforms[platform].enabled,
@@ -53,15 +53,15 @@ export function createAPIServer(streamManagerInstance) {
         hasKey: !!config.platforms[platform].streamKey
       };
     });
-    
+
     res.json(safeConfig);
   });
-  
+
   // Get active streams
   app.get('/api/streams', (req, res) => {
     if (streamManager) {
       const activeStreams = streamManager.getActiveStreams();
-      res.json({ 
+      res.json({
         streams: activeStreams,
         isActive: activeStreams.length > 0
       });
@@ -76,27 +76,27 @@ export function createAPIServer(streamManagerInstance) {
       const newConfig = loadConfig();
       configEvents.emit('configReloaded', newConfig);
       logger.info('Manual configuration reload triggered');
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: 'Configuration reloaded successfully',
         timestamp: new Date().toISOString()
       });
     } catch (error) {
       logger.error('Manual config reload failed:', error);
-      res.status(500).json({ 
-        success: false, 
+      res.status(500).json({
+        success: false,
         message: 'Failed to reload configuration',
         error: error.message
       });
     }
   });
-  
+
   // Toggle platform enabled/disabled status
   app.post('/api/platforms/:platform/toggle', async (req, res) => {
     try {
       const { platform } = req.params;
       const config = loadConfig();
-      
+
       // Check if platform exists
       if (!config.platforms[platform]) {
         return res.status(404).json({
@@ -104,24 +104,24 @@ export function createAPIServer(streamManagerInstance) {
           message: `Platform ${platform} not found`
         });
       }
-      
+
       // Read current config file
       const configPath = path.join(process.cwd(), 'config.yaml');
       const configContent = fs.readFileSync(configPath, 'utf8');
       const yamlConfig = yaml.parse(configContent);
-      
+
       // Toggle the platform status
       yamlConfig.platforms[platform].enabled = !yamlConfig.platforms[platform].enabled;
-      
+
       // Write back to file
-      const updatedYaml = yaml.stringify(yamlConfig, { 
+      const updatedYaml = yaml.stringify(yamlConfig, {
         indent: 2,
-        lineWidth: 0 
+        lineWidth: 0
       });
       fs.writeFileSync(configPath, updatedYaml);
-      
+
       logger.info(`Platform ${platform} toggled to ${yamlConfig.platforms[platform].enabled ? 'enabled' : 'disabled'}`);
-      
+
       // The file watcher will automatically trigger a config reload
       res.json({
         success: true,
@@ -138,7 +138,7 @@ export function createAPIServer(streamManagerInstance) {
       });
     }
   });
-  
+
   // Simple dashboard
   app.get('/', (req, res) => {
     res.send(`
@@ -242,6 +242,10 @@ export function createAPIServer(streamManagerInstance) {
             margin: 20px 0;
             padding: 0;
             overflow: hidden;
+            display: none; /* Hidden by default until enabled */
+          }
+          .video-container.visible {
+            display: block;
           }
           #videoPlayer {
             width: 100%;
@@ -328,6 +332,12 @@ export function createAPIServer(streamManagerInstance) {
           .collapsible-content.expanded {
             max-height: 200px;
           }
+          .player-controls {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            justify-content: space-between;
+          }
         </style>
       </head>
       <body>
@@ -352,15 +362,65 @@ export function createAPIServer(streamManagerInstance) {
           <div id="platforms">Loading...</div>
           
           <div class="debug-section">
-            <h2>Debug Stream Player</h2>
-            <div id="streamStatus" class="stream-status stream-inactive">Stream Not Active</div>
-            <div class="video-container">
-              <video id="videoPlayer" controls></video>
+            <div class="player-controls">
+              <h2>Debug Stream Player</h2>
+              <label class="toggle-switch">
+                <input type="checkbox" id="playerToggle" onchange="togglePlayer(this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
             </div>
-            <p><small>The debug stream will appear here when browser_debug platform is enabled and a stream is active.</small></p>
+            <div id="playerStatusText" style="margin-bottom: 10px; font-style: italic;">Player is disabled to save resources</div>
+            
+            <div id="playerContainer" style="display: none;">
+              <div id="streamStatus" class="stream-status stream-inactive">Stream Not Active</div>
+              <div class="video-container" id="videoWrapper">
+                <video id="videoPlayer" controls></video>
+              </div>
+              <p><small>The debug stream will appear here when browser_debug platform is enabled and a stream is active.</small></p>
+            </div>
           </div>
         </div>
         <script>
+          // Local storage key
+          const PLAYER_PREF_KEY = 'multistream_player_enabled';
+          let playerEnabled = localStorage.getItem(PLAYER_PREF_KEY) !== 'false'; // Default true
+          
+          // Set initial checkbox state
+          document.getElementById('playerToggle').checked = playerEnabled;
+          updatePlayerVisibility();
+
+          function togglePlayer(enabled) {
+            playerEnabled = enabled;
+            localStorage.setItem(PLAYER_PREF_KEY, enabled);
+            updatePlayerVisibility();
+            
+            if (enabled) {
+              loadStatus(); // Re-trigger load to setup player if needed
+            } else {
+              // Destroy player if disabled
+              if (flvPlayer) {
+                flvPlayer.destroy();
+                flvPlayer = null;
+              }
+            }
+          }
+          
+          function updatePlayerVisibility() {
+            const container = document.getElementById('playerContainer');
+            const statusText = document.getElementById('playerStatusText');
+            const videoWrapper = document.getElementById('videoWrapper');
+            
+            if (playerEnabled) {
+              container.style.display = 'block';
+              statusText.style.display = 'none';
+              videoWrapper.classList.add('visible');
+            } else {
+              container.style.display = 'none';
+              statusText.style.display = 'block';
+              videoWrapper.classList.remove('visible');
+            }
+          }
+
           async function loadStatus() {
             try {
               const response = await fetch('/api/config');
@@ -397,12 +457,16 @@ export function createAPIServer(streamManagerInstance) {
                 platformsDiv.appendChild(div);
               });
               
-              // Check if browser_debug is enabled
-              if (config.platforms.browser_debug && config.platforms.browser_debug.enabled) {
+              // Check if browser_debug is enabled AND player is locally enabled
+              if (config.platforms.browser_debug && config.platforms.browser_debug.enabled && playerEnabled) {
                 setupVideoPlayer();
                 startStreamCheck();
+              } else if (!playerEnabled && streamCheckInterval) {
+                 clearInterval(streamCheckInterval);
+                 streamCheckInterval = null;
               }
             } catch (error) {
+              console.error(error);
               document.getElementById('platforms').innerHTML = 'Error loading status';
             }
           }
@@ -412,6 +476,8 @@ export function createAPIServer(streamManagerInstance) {
           let streamCheckInterval = null;
           
           function setupVideoPlayer() {
+            if (!playerEnabled) return;
+
             if (flvjsLoaded) {
               checkAndPlayStream();
               return;
@@ -427,6 +493,8 @@ export function createAPIServer(streamManagerInstance) {
           }
           
           function checkAndPlayStream() {
+            if (!playerEnabled) return;
+
             // Check stream status first
             fetch('/api/streams')
               .then(res => res.json())
@@ -448,7 +516,7 @@ export function createAPIServer(streamManagerInstance) {
           }
           
           function initializePlayer() {
-            if (flvPlayer || !flvjs.isSupported()) return;
+            if (flvPlayer || !flvjs.isSupported() || !playerEnabled) return;
             
             const video = document.getElementById('videoPlayer');
             const streamUrl = '/live/stream.flv';
@@ -499,6 +567,8 @@ export function createAPIServer(streamManagerInstance) {
           
           // Check stream status periodically
           function startStreamCheck() {
+            if (!playerEnabled) return;
+
             checkAndPlayStream();
             if (streamCheckInterval) clearInterval(streamCheckInterval);
             streamCheckInterval = setInterval(checkAndPlayStream, 3000);
@@ -601,6 +671,6 @@ export function createAPIServer(streamManagerInstance) {
       </html>
     `);
   });
-  
+
   return app;
 }
