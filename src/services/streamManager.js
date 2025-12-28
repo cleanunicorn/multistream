@@ -4,6 +4,7 @@ import { loadConfig, configEvents } from '../config/config.js';
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
+import { transcribeFile } from '../utils/transcription.js';
 
 export class StreamManager {
   constructor() {
@@ -166,18 +167,9 @@ export class StreamManager {
         if (err.message && (err.message.includes('SIGINT') || err.message.includes('code 255'))) {
           logger.info(`Recording stopped (SIGINT): ${outputPath}`);
 
-          // Automatic transcription (same logic as 'end')
-          const txtOutput = outputPath.substring(0, outputPath.lastIndexOf('.')) + '.txt';
-          const quillCommand = `quill -t ${outputPath} ${txtOutput}`;
-
-          logger.info(`Starting transcription: ${quillCommand}`);
-          exec(quillCommand, (error, stdout, stderr) => {
-            if (error) {
-              logger.error(`Transcription error for ${filename}:`, error);
-              return;
-            }
-            logger.info(`Transcription completed for ${filename}`);
-          });
+          // Automatic transcription
+          transcribeFile(outputPath);
+          return;
           return;
         }
 
@@ -187,17 +179,7 @@ export class StreamManager {
         logger.info(`Recording completed: ${outputPath}`);
 
         // Automatic transcription
-        const txtOutput = outputPath.substring(0, outputPath.lastIndexOf('.')) + '.txt';
-        const quillCommand = `quill -t ${outputPath} ${txtOutput}`;
-
-        logger.info(`Starting transcription: ${quillCommand}`);
-        exec(quillCommand, (error, stdout, stderr) => {
-          if (error) {
-            logger.error(`Transcription error for ${filename}:`, error);
-            return;
-          }
-          logger.info(`Transcription completed for ${filename}`);
-        });
+        transcribeFile(outputPath);
       });
 
     command.run();

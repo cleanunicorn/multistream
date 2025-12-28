@@ -6,6 +6,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 import fs from 'fs';
 import path from 'path';
 import yaml from 'yaml';
+import { transcribeFile } from '../utils/transcription.js';
 import fileUpload from 'express-fileupload';
 
 let streamManager = null;
@@ -447,24 +448,17 @@ export function createAPIServer(streamManagerInstance) {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    const quillCommand = `quill -t ${filePath} ${tmpOutput}`;
-    logger.info(`Starting manual transcription: ${quillCommand}`);
-
-    exec(quillCommand, (error, stdout, stderr) => {
+    // Use shared transcription utility
+    transcribeFile(filePath, (error) => {
       if (error) {
-        logger.error(`Transcription error for ${filename}:`, error);
-        // Clean up temp file
-        if (fs.existsSync(tmpOutput)) {
-          fs.unlinkSync(tmpOutput);
-        }
+        // Logging is already handled in transcribeFile
       } else {
-        // Success: Rename temp file to final text file
-        fs.renameSync(tmpOutput, txtOutput);
-        logger.info(`Manual transcription completed for ${filename}`);
+        // Success logging already handled
       }
     });
 
     res.json({ success: true, message: 'Transcription started' });
+
   });
 
   // Get transcription content
