@@ -15,6 +15,25 @@
             <a href="/" class="back-link">← Back to Dashboard</a>
         </h1>
 
+        <div class="upload-section" style="margin-bottom: 20px;">
+            <button onclick="document.getElementById('videoUpload').click()" class="btn btn-primary">Upload
+                Video(s)</button>
+            <input type="file" id="videoUpload" accept="video/*" multiple style="display: none;"
+                onchange="uploadVideo(this)">
+            <div id="uploadContainer" style="display: none; margin-top: 10px; max-width: 500px;">
+                <div style="margin-bottom: 5px;">
+                    <span id="uploadStatus">Uploading...</span>
+                    <span id="uploadPercent" style="float: right;">0%</span>
+                </div>
+                <div class="progress-bar-container"
+                    style="width: 100%; background-color: #ddd; height: 20px; border-radius: 4px; overflow: hidden;">
+                    <div id="uploadProgressBar"
+                        style="width: 0%; height: 100%; background-color: #4CAF50; transition: width 0.2s;"></div>
+                </div>
+            </div>
+            <span id="uploadResult" style="margin-left: 10px; font-style: italic;"></span>
+        </div>
+
         <div id="fileList">Loading...</div>
 
         <div id="videoModal" class="modal">

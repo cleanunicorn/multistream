@@ -6,6 +6,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 import fs from 'fs';
 import path from 'path';
 import yaml from 'yaml';
+import fileUpload from 'express-fileupload';
 
 let streamManager = null;
 
@@ -144,6 +145,50 @@ export function createAPIServer(streamManagerInstance) {
       logger.error('Failed to update recording config:', error);
       res.status(500).json({ error: 'Failed to update configuration' });
     }
+  });
+
+  // Enable file upload
+  app.use(fileUpload({
+    limits: { fileSize: 50 * 1024 * 1024 * 1024 }, // 50GB limit
+    abortOnLimit: true,
+    createParentPath: true
+  }));
+
+  app.post('/api/recordings/upload', (req, res) => {
+    if (!req.files || Object.keys(req.files).length === 0) {
+      return res.status(400).json({ error: 'No files were uploaded.' });
+    }
+
+    const videoFile = req.files.video;
+
+    // Check if it's a video
+    if (!videoFile.mimetype.startsWith('video/')) {
+      return res.status(400).json({ error: 'Only video files are allowed!' });
+    }
+
+    const recPath = config.recording && config.recording.path ?
+      path.resolve(process.cwd(), config.recording.path) :
+      path.join(process.cwd(), 'recordings');
+
+    // Create directory if not exists
+    if (!fs.existsSync(recPath)) {
+      fs.mkdirSync(recPath, { recursive: true });
+    }
+
+    // Determine filename
+    const safeName = videoFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const uploadPath = path.join(recPath, safeName);
+
+    // Move file
+    videoFile.mv(uploadPath, function (err) {
+      if (err) {
+        logger.error('File upload error:', err);
+        return res.status(500).json({ error: err.message });
+      }
+
+      logger.info(`File uploaded: ${safeName}`);
+      res.json({ success: true, filename: safeName });
+    });
   });
 
   // Toggle platform enabled/disabled status
@@ -313,6 +358,7 @@ export function createAPIServer(streamManagerInstance) {
         .filter(file => {
           if (file.startsWith('.')) return false;
           if (file.endsWith('.txt')) return false;
+          if (file.endsWith('.tmp')) return false;
           const stats = fs.statSync(path.join(recPath, file));
           return stats.isFile(); // Only list files, not directories like 'clips'
         })
@@ -320,13 +366,15 @@ export function createAPIServer(streamManagerInstance) {
           const stats = fs.statSync(path.join(recPath, file));
           const txtFilename = file.substring(0, file.lastIndexOf('.')) + '.txt';
           const hasTranscription = fs.existsSync(path.join(recPath, txtFilename));
+          const isProcessing = fs.existsSync(path.join(recPath, txtFilename + '.tmp'));
 
           return {
             name: file,
             size: stats.size,
             created: stats.birthtime,
             url: `/recordings-files/${file}`,
-            hasTranscription
+            hasTranscription,
+            isProcessing
           };
         })
         .sort((a, b) => b.created - a.created); // Newest first
@@ -391,20 +439,25 @@ export function createAPIServer(streamManagerInstance) {
 
     const filePath = path.join(recPath, filename);
     const txtOutput = filePath.substring(0, filePath.lastIndexOf('.')) + '.txt';
+    const tmpOutput = txtOutput + '.tmp';
 
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    const quillCommand = `quill -t ${filePath} ${txtOutput}`;
+    const quillCommand = `quill -t ${filePath} ${tmpOutput}`;
     logger.info(`Starting manual transcription: ${quillCommand}`);
 
     exec(quillCommand, (error, stdout, stderr) => {
       if (error) {
         logger.error(`Transcription error for ${filename}:`, error);
-        // We don't wait for completion to respond, so we can't easily report error to client here
-        // But for this simplified version, we'll respond immediately saying it started
+        // Clean up temp file
+        if (fs.existsSync(tmpOutput)) {
+          fs.unlinkSync(tmpOutput);
+        }
       } else {
+        // Success: Rename temp file to final text file
+        fs.renameSync(tmpOutput, txtOutput);
         logger.info(`Manual transcription completed for ${filename}`);
       }
     });
