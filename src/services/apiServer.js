@@ -310,7 +310,12 @@ export function createAPIServer(streamManagerInstance) {
       }
 
       const files = fs.readdirSync(recPath)
-        .filter(file => !file.startsWith('.')) // Skip hidden files
+        .filter(file => {
+          if (file.startsWith('.')) return false;
+          if (file.endsWith('.txt')) return false;
+          const stats = fs.statSync(path.join(recPath, file));
+          return stats.isFile(); // Only list files, not directories like 'clips'
+        })
         .map(file => {
           const stats = fs.statSync(path.join(recPath, file));
           const txtFilename = file.substring(0, file.lastIndexOf('.')) + '.txt';
@@ -421,11 +426,91 @@ export function createAPIServer(streamManagerInstance) {
 
     try {
       const content = fs.readFileSync(filePath, 'utf8');
-      res.json({ success: true, content });
+
+      // Parse highlights
+      const lines = content.split('\n');
+      const highlights = [];
+      const regex = /^\[(\d{2}:\d{2}:\d{2}) -> \d{2}:\d{2}:\d{2}\] (.*)$/;
+
+      lines.forEach(line => {
+        const match = line.match(regex);
+        if (match) {
+          const timestamp = match[1];
+          const text = match[2];
+
+          if (text.toLowerCase().includes('clip that')) {
+            highlights.push({ timestamp, text });
+          }
+        }
+      });
+
+      res.json({ success: true, content, highlights });
     } catch (error) {
       logger.error('Error reading transcription:', error);
       res.status(500).json({ error: 'Failed to read transcription' });
     }
+  });
+
+  // Generate clip
+  app.post('/api/recordings/:filename/clip', async (req, res) => {
+    const { filename } = req.params;
+    const { timestamp } = req.body;
+
+    if (!timestamp || !/^\d{2}:\d{2}:\d{2}$/.test(timestamp)) {
+      return res.status(400).json({ error: 'Invalid timestamp format' });
+    }
+
+    if (filename.includes('..') || filename.includes('/')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const recPath = config.recording && config.recording.path ?
+      path.resolve(process.cwd(), config.recording.path) :
+      path.join(process.cwd(), 'recordings');
+
+    const clipsPath = path.join(recPath, 'clips');
+    if (!fs.existsSync(clipsPath)) {
+      fs.mkdirSync(clipsPath, { recursive: true });
+    }
+
+    const videoPath = path.join(recPath, filename);
+    if (!fs.existsSync(videoPath)) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    // Convert timestamp to seconds
+    const parts = timestamp.split(':').map(Number);
+    const seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+
+    // Calculate start time (2 minutes before)
+    const startTime = Math.max(0, seconds - 120);
+    // Duration: 4 minutes (2 mins before + 2 mins after)
+    const duration = 240;
+
+    const clipFilename = `${filename.replace(/\.[^/.]+$/, "")}_clip_${timestamp.replace(/:/g, '-')}.mp4`;
+    const outputPath = path.join(clipsPath, clipFilename);
+
+    // Using ffmpeg to extract clip
+    // -ss placed before -i for faster seeking
+    const ffmpegCommand = `ffmpeg -ss ${startTime} -i "${videoPath}" -t ${duration} -c copy -y "${outputPath}"`;
+
+    logger.info(`Generating clip: ${ffmpegCommand}`);
+
+    exec(ffmpegCommand, (error, stdout, stderr) => {
+      if (error) {
+        logger.error(`Error generating clip:`, error);
+        return res.status(500).json({ error: 'Failed to generate clip' });
+      }
+
+      logger.info(`Clip generated: ${outputPath}`);
+      // Assuming recordings-files serves the recordings directory
+      // We serve clips from a subdirectory
+      res.json({
+        success: true,
+        message: 'Clip generated',
+        url: `/recordings-files/clips/${clipFilename}`
+      });
+    });
   });
 
   // Recordings page
@@ -537,6 +622,9 @@ export function createAPIServer(streamManagerInstance) {
             justify-content: center;
             align-items: center;
           }
+          #videoModal {
+            z-index: 1001;
+          }
           .modal-content {
             background-color: white;
             padding: 20px;
@@ -587,6 +675,51 @@ export function createAPIServer(streamManagerInstance) {
             max-height: 60vh;
             overflow-y: auto;
           }
+          .transcription-container {
+            display: flex;
+            gap: 20px;
+            height: 60vh;
+          }
+          .transcription-text {
+            flex: 2;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+          }
+          .transcription-text pre {
+            max-height: none;
+            overflow-y: visible;
+            padding: 0;
+            border: none;
+            background: transparent;
+            margin: 0;
+          }
+          .highlights-list {
+            flex: 1;
+            overflow-y: auto;
+            background-color: #fff3cd;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #ffeeba;
+          }
+          .highlight-item {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ffeeba;
+          }
+          .highlight-time {
+            font-weight: bold;
+            color: #856404;
+          }
+          .highlight-text {
+            font-size: 14px;
+            color: #333;
+            margin-top: 4px;
+          }
         </style>
       </head>
       <body>
@@ -614,7 +747,12 @@ export function createAPIServer(streamManagerInstance) {
                 <span id="textTitle">Transcription</span>
                 <span class="close-modal" onclick="closeModal('textModal')">&times;</span>
               </div>
-              <div id="textContent">Loading...</div>
+              <div class="transcription-container">
+                <div id="textContent" class="transcription-text">Loading...</div>
+                <div id="highlightsContent" class="highlights-list">
+                  <div style="text-align: center; color: #856404;">Loading highlights...</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -656,9 +794,11 @@ export function createAPIServer(streamManagerInstance) {
                    transcriptionBtn = \`<button onclick="transcribe('\${file.name}')" class="btn btn-info">Transcribe</button>\`;
                 }
 
+                const displayName = formatDisplayName(file.name);
+                
                 html += \`
                   <tr>
-                    <td>\${file.name}</td>
+                    <td>\${displayName}</td>
                     <td>\${date}</td>
                     <td>\${size}</td>
                     <td class="actions">
@@ -718,10 +858,12 @@ export function createAPIServer(streamManagerInstance) {
           async function viewTranscription(filename) {
              const modal = document.getElementById('textModal');
              const contentDiv = document.getElementById('textContent');
+             const highlightsDiv = document.getElementById('highlightsContent');
              const titleEl = document.getElementById('textTitle');
              
              titleEl.textContent = \`Transcription: \${filename}\`;
              contentDiv.innerHTML = 'Loading...';
+             highlightsDiv.innerHTML = 'Loading...';
              modal.style.display = 'flex';
 
              try {
@@ -729,17 +871,78 @@ export function createAPIServer(streamManagerInstance) {
                 const data = await response.json();
                 
                 if (data.success) {
-                   contentDiv.innerHTML = \`<pre>\${data.content}</pre>\`;
+                   // Fix formatting by using a pre element
+                   contentDiv.innerHTML = '';
+                   const pre = document.createElement('pre');
+                   pre.style.whiteSpace = 'pre-wrap';
+                   pre.style.margin = '0';
+                   pre.style.fontFamily = 'monospace';
+                   pre.style.border = 'none';
+                   pre.style.background = 'transparent';
+                   pre.textContent = data.content;
+                   contentDiv.appendChild(pre);
+                   
+                   if (data.highlights && data.highlights.length > 0) {
+                     let highlightsHtml = '<h3>Highlights ("clip that")</h3>';
+                     data.highlights.forEach(h => {
+                       highlightsHtml += \`
+                         <div class="highlight-item">
+                           <div class="highlight-time">\${h.timestamp}</div>
+                           <div class="highlight-text">\${h.text}</div>
+                           <button onclick="previewClip('\${filename}', '\${h.timestamp}', this)" class="btn btn-info" style="margin-top:5px; font-size: 12px; padding: 3px 8px; margin-right: 5px;">Preview Clip</button>
+                           <button onclick="downloadClip('\${filename}', '\${h.timestamp}', this)" class="btn btn-secondary" style="margin-top:5px; font-size: 12px; padding: 3px 8px;">Download Clip</button>
+                         </div>
+                       \`;
+                     });
+                     highlightsDiv.innerHTML = highlightsHtml;
+                   } else {
+                     highlightsDiv.innerHTML = '<h3>Highlights</h3><div style="font-style:italic; color:#666;">No "clip that" moments found.</div>';
+                   }
                 } else {
                    contentDiv.innerHTML = 'Failed to load transcription.';
+                   highlightsDiv.innerHTML = '';
                 }
              } catch (error) {
                 console.error('Error loading transcription:', error);
                 contentDiv.innerHTML = 'Error loading transcription.';
+                highlightsDiv.innerHTML = '';
              }
           }
           
-          function formatSize(bytes) {
+          function formatDisplayName(filename) {
+            // Use regex literal. Backslashes are escaped once for the Node.js template string.
+            // Node sees \\d -> output string has \d -> Browser sees /...\d.../ -> Regex digit.
+            const regex = /stream_(\\d{4}-\\d{2}-\\d{2})T(\\d{2})[-:](\\d{2})[-:](\\d{2})[-:](\\d{3})Z/;
+            const match = filename.match(regex);
+            
+            if (match) {
+               const datePart = match[1];
+               const hours = match[2];
+               const minutes = match[3];
+               const seconds = match[4];
+               
+               try {
+                   const dateStr = \`\${datePart}T\${hours}:\${minutes}:\${seconds}Z\`;
+                   const dateObj = new Date(dateStr);
+                   
+                   if (!isNaN(dateObj.getTime())) {
+                       return dateObj.toLocaleDateString(undefined, {
+                         year: 'numeric',
+                         month: 'short',
+                         day: 'numeric'
+                       }) + ' - ' + dateObj.toLocaleTimeString(undefined, {
+                         hour: '2-digit',
+                         minute: '2-digit'
+                       });
+                   }
+               } catch (e) {
+                   console.error('Date parsing error:', e);
+               }
+            }
+            return filename;
+          }
+           
+           function formatSize(bytes) {
             if (bytes === 0) return '0 Bytes';
             const k = 1024;
             const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -784,7 +987,97 @@ export function createAPIServer(streamManagerInstance) {
             }
           }
           
+          async function previewClip(filename, timestamp, btn) {
+             const originalText = btn.textContent;
+             btn.disabled = true;
+             btn.textContent = 'Preparing...';
+             
+             try {
+                // Reuse the same clip generation endpoint
+                const response = await fetch(\`/api/recordings/\${filename}/clip\`, {
+                   method: 'POST',
+                   headers: {
+                      'Content-Type': 'application/json'
+                   },
+                   body: JSON.stringify({ timestamp })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                   playVideo(result.url, \`Preview: \${timestamp}\`);
+                   btn.textContent = 'Playing...';
+                   setTimeout(() => {
+                      btn.textContent = originalText;
+                      btn.disabled = false;
+                   }, 1000);
+                } else {
+                   alert('Failed to preview clip: ' + (result.error || 'Unknown error'));
+                   btn.textContent = originalText;
+                   btn.disabled = false;
+                }
+             } catch (error) {
+                console.error('Error previewing clip:', error);
+                alert('Error previewing clip');
+                btn.textContent = originalText;
+                btn.disabled = false;
+             }
+          }
+          
+          async function downloadClip(filename, timestamp, btn) {
+             const originalText = btn.textContent;
+             btn.disabled = true;
+             btn.textContent = 'Generating...';
+             
+             try {
+                const response = await fetch(\`/api/recordings/\${filename}/clip\`, {
+                   method: 'POST',
+                   headers: {
+                      'Content-Type': 'application/json'
+                   },
+                   body: JSON.stringify({ timestamp })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                   const a = document.createElement('a');
+                   a.href = result.url;
+                   a.download = ''; // Let browser decide name
+                   document.body.appendChild(a);
+                   a.click();
+                   document.body.removeChild(a);
+                   btn.textContent = 'Done!';
+                   setTimeout(() => {
+                      btn.textContent = originalText;
+                      btn.disabled = false;
+                   }, 3000);
+                } else {
+                   alert('Failed to generate clip: ' + (result.error || 'Unknown error'));
+                   btn.textContent = originalText;
+                   btn.disabled = false;
+                }
+             } catch (error) {
+                console.error('Error generating clip:', error);
+                alert('Error generating clip');
+                btn.textContent = originalText;
+                btn.disabled = false;
+             }
+          }
+
+          // Initial load
           loadFiles();
+          
+          // Auto-refresh every 5 seconds
+          setInterval(() => {
+            // Only refresh if no modal is open to avoid disrupting user
+            const textModal = document.getElementById('textModal');
+            const videoModal = document.getElementById('videoModal');
+            
+            if (textModal.style.display !== 'flex' && videoModal.style.display !== 'flex') {
+              loadFiles();
+            }
+          }, 5000);
         </script>
       </body>
       </html>
@@ -999,13 +1292,6 @@ export function createAPIServer(streamManagerInstance) {
             <h1>Multistream Server</h1>
             <a href="/recordings" style="text-decoration: none; background-color: #0099cc; color: white; padding: 8px 15px; border-radius: 4px; font-weight: bold;">View Recordings</a>
           </div>
-          <div class="info-box">
-            <h3 class="collapsible collapsed" onclick="toggleCollapse('obsConfig')">OBS Configuration</h3>
-            <div id="obsConfig" class="collapsible-content collapsed">
-              <p><strong>Server:</strong> <code>rtmp://localhost:1935/live</code></p>
-              <p><strong>Stream Key:</strong> <code>stream</code></p>
-            </div>
-          </div>
           
           <div class="reload-section">
             <h3>Configuration</h3>
@@ -1033,6 +1319,13 @@ export function createAPIServer(streamManagerInstance) {
                 <video id="videoPlayer" controls></video>
               </div>
               <p><small>The debug stream will appear here when browser_debug platform is enabled and a stream is active.</small></p>
+            </div>
+          </div>
+          <div class="info-box">
+            <h3 class="collapsible collapsed" onclick="toggleCollapse('obsConfig')">OBS Configuration</h3>
+            <div id="obsConfig" class="collapsible-content collapsed">
+              <p><strong>Server:</strong> <code>rtmp://localhost:1935/live</code></p>
+              <p><strong>Stream Key:</strong> <code>stream</code></p>
             </div>
           </div>
         </div>
