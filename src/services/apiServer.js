@@ -1,4 +1,5 @@
 import express from 'express';
+import { exec } from 'child_process';
 import logger from '../utils/logger.js';
 import { loadConfig, configEvents } from '../config/config.js';
 import { createProxyMiddleware } from 'http-proxy-middleware';
@@ -312,11 +313,15 @@ export function createAPIServer(streamManagerInstance) {
         .filter(file => !file.startsWith('.')) // Skip hidden files
         .map(file => {
           const stats = fs.statSync(path.join(recPath, file));
+          const txtFilename = file.substring(0, file.lastIndexOf('.')) + '.txt';
+          const hasTranscription = fs.existsSync(path.join(recPath, txtFilename));
+
           return {
             name: file,
             size: stats.size,
             created: stats.birthtime,
-            url: `/recordings-files/${file}`
+            url: `/recordings-files/${file}`,
+            hasTranscription
           };
         })
         .sort((a, b) => b.created - a.created); // Newest first
@@ -355,6 +360,71 @@ export function createAPIServer(streamManagerInstance) {
     } catch (error) {
       logger.error('Error deleting recording:', error);
       res.status(500).json({ error: 'Failed to delete recording' });
+    }
+  });
+
+  // Manual transcription
+  app.post('/api/recordings/:filename/transcribe', (req, res) => {
+    const { filename } = req.params;
+
+    // Basic security check
+    if (filename.includes('..') || filename.includes('/')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const recPath = config.recording && config.recording.path ?
+      path.resolve(process.cwd(), config.recording.path) :
+      path.join(process.cwd(), 'recordings');
+
+    const filePath = path.join(recPath, filename);
+    const txtOutput = filePath.substring(0, filePath.lastIndexOf('.')) + '.txt';
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const quillCommand = `quill -t ${filePath} ${txtOutput}`;
+    logger.info(`Starting manual transcription: ${quillCommand}`);
+
+    exec(quillCommand, (error, stdout, stderr) => {
+      if (error) {
+        logger.error(`Transcription error for ${filename}:`, error);
+        // We don't wait for completion to respond, so we can't easily report error to client here
+        // But for this simplified version, we'll respond immediately saying it started
+      } else {
+        logger.info(`Manual transcription completed for ${filename}`);
+      }
+    });
+
+    res.json({ success: true, message: 'Transcription started' });
+  });
+
+  // Get transcription content
+  app.get('/api/recordings/:filename/transcription', (req, res) => {
+    const { filename } = req.params;
+
+    if (filename.includes('..') || filename.includes('/')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const recPath = config.recording && config.recording.path ?
+      path.resolve(process.cwd(), config.recording.path) :
+      path.join(process.cwd(), 'recordings');
+
+    // Filename here is the video filename, so we need to change extension
+    const txtFilename = filename.substring(0, filename.lastIndexOf('.')) + '.txt';
+    const filePath = path.join(recPath, txtFilename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Transcription not found' });
+    }
+
+    try {
+      const content = fs.readFileSync(filePath, 'utf8');
+      res.json({ success: true, content });
+    } catch (error) {
+      logger.error('Error reading transcription:', error);
+      res.status(500).json({ error: 'Failed to read transcription' });
     }
   });
 
@@ -442,6 +512,13 @@ export function createAPIServer(streamManagerInstance) {
           .btn-danger:hover {
             background-color: #c82333;
           }
+          .btn-info {
+            background-color: #17a2b8;
+            color: white;
+          }
+          .btn-info:hover {
+            background-color: #138496;
+          }
           .empty-state {
             text-align: center;
             padding: 40px;
@@ -461,7 +538,7 @@ export function createAPIServer(streamManagerInstance) {
             align-items: center;
           }
           .modal-content {
-            background-color: black;
+            background-color: white;
             padding: 20px;
             border-radius: 8px;
             max-width: 90%;
@@ -469,11 +546,21 @@ export function createAPIServer(streamManagerInstance) {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            overflow-y: auto;
+          }
+          .modal-content.video-content {
+             background-color: black;
           }
           .modal-header {
             display: flex;
             justify-content: space-between;
-            color: white;
+            color: #333;
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 10px;
+          }
+          .video-content .modal-header {
+             color: white;
           }
           .close-modal {
             color: #ccc;
@@ -481,11 +568,24 @@ export function createAPIServer(streamManagerInstance) {
             font-size: 24px;
           }
           .close-modal:hover {
+            color: #333;
+          }
+          .video-content .close-modal:hover {
             color: white;
           }
           video {
             max-width: 100%;
             max-height: 80vh;
+          }
+          pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            max-height: 60vh;
+            overflow-y: auto;
           }
         </style>
       </head>
@@ -499,12 +599,22 @@ export function createAPIServer(streamManagerInstance) {
           <div id="fileList">Loading...</div>
           
           <div id="videoModal" class="modal">
-            <div class="modal-content">
+            <div class="modal-content video-content">
               <div class="modal-header">
                 <span id="videoTitle">Playing...</span>
-                <span class="close-modal" onclick="closeModal()">&times;</span>
+                <span class="close-modal" onclick="closeModal('videoModal')">&times;</span>
               </div>
               <video id="player" controls></video>
+            </div>
+          </div>
+
+          <div id="textModal" class="modal">
+            <div class="modal-content">
+              <div class="modal-header">
+                <span id="textTitle">Transcription</span>
+                <span class="close-modal" onclick="closeModal('textModal')">&times;</span>
+              </div>
+              <div id="textContent">Loading...</div>
             </div>
           </div>
         </div>
@@ -533,12 +643,19 @@ export function createAPIServer(streamManagerInstance) {
                     </tr>
                   </thead>
                   <tbody>
-              \`;
+                  \`;
               
               data.files.forEach(file => {
                 const date = new Date(file.created).toLocaleString();
                 const size = formatSize(file.size);
                 
+                let transcriptionBtn = '';
+                if (file.hasTranscription) {
+                   transcriptionBtn = \`<button onclick="viewTranscription('\${file.name}')" class="btn btn-info">View Transcription</button>\`;
+                } else {
+                   transcriptionBtn = \`<button onclick="transcribe('\${file.name}')" class="btn btn-info">Transcribe</button>\`;
+                }
+
                 html += \`
                   <tr>
                     <td>\${file.name}</td>
@@ -547,6 +664,7 @@ export function createAPIServer(streamManagerInstance) {
                     <td class="actions">
                       <button onclick="playVideo('\${file.url}', '\${file.name}')" class="btn btn-primary">Play</button>
                       <a href="\${file.url}" download class="btn btn-secondary">Download</a>
+                      \${transcriptionBtn}
                       <button onclick="deleteRecording('\${file.name}')" class="btn btn-danger">Delete</button>
                     </td>
                   </tr>
@@ -581,6 +699,45 @@ export function createAPIServer(streamManagerInstance) {
               alert('Error deleting file');
             }
           }
+
+          async function transcribe(filename) {
+             try {
+                const response = await fetch(\`/api/recordings/\${filename}/transcribe\`, { method: 'POST' });
+                if (response.ok) {
+                   alert('Transcription started. It will appear once finished (refresh the page).');
+                   // We could poll or just let the user refresh
+                } else {
+                   alert('Failed to start transcription');
+                }
+             } catch (error) {
+                console.error('Error starting transcription:', error);
+                alert('Error starting transcription');
+             }
+          }
+
+          async function viewTranscription(filename) {
+             const modal = document.getElementById('textModal');
+             const contentDiv = document.getElementById('textContent');
+             const titleEl = document.getElementById('textTitle');
+             
+             titleEl.textContent = \`Transcription: \${filename}\`;
+             contentDiv.innerHTML = 'Loading...';
+             modal.style.display = 'flex';
+
+             try {
+                const response = await fetch(\`/api/recordings/\${filename}/transcription\`);
+                const data = await response.json();
+                
+                if (data.success) {
+                   contentDiv.innerHTML = \`<pre>\${data.content}</pre>\`;
+                } else {
+                   contentDiv.innerHTML = 'Failed to load transcription.';
+                }
+             } catch (error) {
+                console.error('Error loading transcription:', error);
+                contentDiv.innerHTML = 'Error loading transcription.';
+             }
+          }
           
           function formatSize(bytes) {
             if (bytes === 0) return '0 Bytes';
@@ -603,20 +760,27 @@ export function createAPIServer(streamManagerInstance) {
             video.play().catch(e => console.error('Play error:', e));
           }
           
-          function closeModal() {
-            const modal = document.getElementById('videoModal');
-            const video = document.getElementById('player');
+          function closeModal(modalId) {
+            const modal = document.getElementById(modalId);
             
-            video.pause();
-            video.src = '';
+            if (modalId === 'videoModal') {
+                const video = document.getElementById('player');
+                video.pause();
+                video.src = '';
+            }
+            
             modal.style.display = 'none';
           }
           
           // Close modal on click outside
           window.onclick = function(event) {
-            const modal = document.getElementById('videoModal');
-            if (event.target == modal) {
-              closeModal();
+            const videoModal = document.getElementById('videoModal');
+            const textModal = document.getElementById('textModal');
+            if (event.target == videoModal) {
+              closeModal('videoModal');
+            }
+            if (event.target == textModal) {
+               closeModal('textModal');
             }
           }
           

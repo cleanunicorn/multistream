@@ -3,6 +3,7 @@ import logger from '../utils/logger.js';
 import { loadConfig, configEvents } from '../config/config.js';
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
 
 export class StreamManager {
   constructor() {
@@ -161,10 +162,42 @@ export class StreamManager {
         logger.debug(`Recording FFmpeg command:`, cmd);
       })
       .on('error', (err) => {
+        // Check if error is actually just a normal stop (SIGINT/255)
+        if (err.message && (err.message.includes('SIGINT') || err.message.includes('code 255'))) {
+          logger.info(`Recording stopped (SIGINT): ${outputPath}`);
+
+          // Automatic transcription (same logic as 'end')
+          const txtOutput = outputPath.substring(0, outputPath.lastIndexOf('.')) + '.txt';
+          const quillCommand = `quill -t ${outputPath} ${txtOutput}`;
+
+          logger.info(`Starting transcription: ${quillCommand}`);
+          exec(quillCommand, (error, stdout, stderr) => {
+            if (error) {
+              logger.error(`Transcription error for ${filename}:`, error);
+              return;
+            }
+            logger.info(`Transcription completed for ${filename}`);
+          });
+          return;
+        }
+
         logger.error(`Recording error:`, err);
       })
       .on('end', () => {
         logger.info(`Recording completed: ${outputPath}`);
+
+        // Automatic transcription
+        const txtOutput = outputPath.substring(0, outputPath.lastIndexOf('.')) + '.txt';
+        const quillCommand = `quill -t ${outputPath} ${txtOutput}`;
+
+        logger.info(`Starting transcription: ${quillCommand}`);
+        exec(quillCommand, (error, stdout, stderr) => {
+          if (error) {
+            logger.error(`Transcription error for ${filename}:`, error);
+            return;
+          }
+          logger.info(`Transcription completed for ${filename}`);
+        });
       });
 
     command.run();
