@@ -50,7 +50,8 @@ export function createAPIServer(streamManagerInstance) {
       safeConfig.platforms[platform] = {
         enabled: config.platforms[platform].enabled,
         rtmpUrl: config.platforms[platform].rtmpUrl,
-        hasKey: !!config.platforms[platform].streamKey
+        hasKey: !!config.platforms[platform].streamKey,
+        test_mode: config.platforms[platform].test_mode || false
       };
     });
 
@@ -224,6 +225,62 @@ export function createAPIServer(streamManagerInstance) {
       res.status(500).json({
         success: false,
         message: 'Failed to toggle platform',
+        error: error.message
+      });
+    }
+  });
+
+  // Toggle platform test mode
+  app.post('/api/platforms/:platform/test-mode', async (req, res) => {
+    try {
+      const { platform } = req.params;
+      const config = loadConfig();
+
+      // Only supported for Twitch currently
+      if (platform !== 'twitch') {
+        return res.status(400).json({
+          success: false,
+          message: 'Test mode only supported for Twitch'
+        });
+      }
+
+      // Read current config file
+      const configPath = path.join(process.cwd(), 'config.yaml');
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const yamlConfig = yaml.parse(configContent);
+
+      // Initialize if missing
+      if (!yamlConfig.platforms[platform]) {
+        return res.status(404).json({
+          success: false,
+          message: `Platform ${platform} not found`
+        });
+      }
+
+      // Toggle test_mode
+      const currentMode = yamlConfig.platforms[platform].test_mode || false;
+      yamlConfig.platforms[platform].test_mode = !currentMode;
+
+      // Write back to file
+      const updatedYaml = yaml.stringify(yamlConfig, {
+        indent: 2,
+        lineWidth: 0
+      });
+      fs.writeFileSync(configPath, updatedYaml);
+
+      logger.info(`Platform ${platform} test mode toggled to ${yamlConfig.platforms[platform].test_mode}`);
+
+      res.json({
+        success: true,
+        platform,
+        test_mode: yamlConfig.platforms[platform].test_mode,
+        message: `Twitch Test Mode ${yamlConfig.platforms[platform].test_mode ? 'enabled' : 'disabled'}`
+      });
+    } catch (error) {
+      logger.error('Failed to toggle test mode:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to toggle test mode',
         error: error.message
       });
     }
@@ -887,6 +944,14 @@ export function createAPIServer(streamManagerInstance) {
                         <option value="flv" \${platform.format === 'flv' ? 'selected' : ''}>FLV</option>
                       </select>
                     \` : ''}
+                    \${name === 'twitch' ? \`
+                      <div style="margin-left: 15px; display: flex; align-items: center; font-size: 0.9em;">
+                        <input type="checkbox" id="twitchTestMode" 
+                          \${platform.test_mode ? 'checked' : ''} 
+                          onchange="toggleTestMode('\${name}', this)">
+                        <label for="twitchTestMode" style="margin-left: 5px; cursor: pointer;" title="Appends ?bandwidthtest=true to stream key">Test Mode (No Live)</label>
+                      </div>
+                    \` : ''}
                   </div>
                   <label class="toggle-switch \${canToggle ? '' : 'disabled'}">
                     <input type="checkbox" 
@@ -1080,6 +1145,37 @@ export function createAPIServer(streamManagerInstance) {
             } finally {
               checkbox.disabled = false;
             }
+          }
+
+          // Toggle test mode
+          async function toggleTestMode(platformName, checkbox) {
+             checkbox.disabled = true;
+             
+             try {
+              const response = await fetch(\`/api/platforms/\${platformName}/test-mode\`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              const result = await response.json();
+              
+              if (!result.success) {
+                checkbox.checked = !checkbox.checked;
+                console.error('Failed to toggle test mode:', result.message);
+                alert('Failed to toggle test mode: ' + result.message);
+              }
+              
+              // Helper to reload status
+              setTimeout(loadStatus, 500);
+             } catch (error) {
+               checkbox.checked = !checkbox.checked;
+               console.error('Error toggling test mode:', error);
+               alert('Error toggling test mode');
+             } finally {
+               checkbox.disabled = false;
+             }
           }
           
           // Manual config reload function

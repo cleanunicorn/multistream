@@ -80,11 +80,16 @@ export class StreamManager {
       return this.createBrowserDebugCommand(inputUrl);
     }
 
-    const outputUrl = `${platformConfig.rtmpUrl}/${platformConfig.streamKey}`;
+    let outputUrl = `${platformConfig.rtmpUrl}/${platformConfig.streamKey}`;
+
+    // Append bandwidthtest flag for Twitch if test_mode is enabled
+    if (platform === 'twitch' && platformConfig.test_mode) {
+      outputUrl += '?bandwidthtest=true';
+      logger.info('Twitch test mode enabled: Appending ?bandwidthtest=true');
+    }
 
     const command = ffmpeg(inputUrl)
       .inputOptions([
-        '-re'
       ])
       .outputOptions([
         '-c:v', 'copy',
@@ -144,7 +149,6 @@ export class StreamManager {
 
     const command = ffmpeg(inputUrl)
       .inputOptions([
-        '-re'
       ])
       .outputOptions([
         '-c:v', 'copy',
@@ -172,7 +176,6 @@ export class StreamManager {
 
     const command = ffmpeg(inputUrl)
       .inputOptions([
-        '-re'
       ])
       .outputOptions([
         '-c:v', 'copy',
