@@ -361,6 +361,14 @@ export function createAPIServer(streamManagerInstance) {
       fs.unlinkSync(filePath);
       logger.info(`Deleted recording: ${filename}`);
 
+      // Also delete transcription if exists
+      const txtFilename = filename.substring(0, filename.lastIndexOf('.')) + '.txt';
+      const txtPath = path.join(recPath, txtFilename);
+      if (fs.existsSync(txtPath)) {
+        fs.unlinkSync(txtPath);
+        logger.info(`Deleted transcription: ${txtFilename}`);
+      }
+
       res.json({ success: true, message: 'File deleted' });
     } catch (error) {
       logger.error('Error deleting recording:', error);

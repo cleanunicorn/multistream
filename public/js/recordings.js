@@ -25,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+const processingFiles = new Set();
+
 async function loadFiles() {
     try {
         const response = await fetch('/api/recordings');
@@ -54,11 +56,17 @@ async function loadFiles() {
             const date = new Date(file.created).toLocaleString();
             const size = formatSize(file.size);
 
+            if (file.hasTranscription && processingFiles.has(file.name)) {
+                processingFiles.delete(file.name);
+            }
+
             let transcriptionBtn = '';
             if (file.hasTranscription) {
                 transcriptionBtn = `<button onclick="viewTranscription('${file.name}')" class="btn btn-info">View Transcription</button>`;
+            } else if (processingFiles.has(file.name)) {
+                transcriptionBtn = `<button class="btn btn-secondary" disabled>Processing...</button>`;
             } else {
-                transcriptionBtn = `<button onclick="transcribe('${file.name}')" class="btn btn-info">Transcribe</button>`;
+                transcriptionBtn = `<button onclick="transcribe('${file.name}', this)" class="btn btn-info">Transcribe</button>`;
             }
 
             const displayName = formatDisplayName(file.name);
@@ -107,18 +115,30 @@ async function deleteRecording(filename) {
     }
 }
 
-async function transcribe(filename) {
+async function transcribe(filename, btn) {
+    if (btn) {
+        btn.textContent = 'Processing...';
+        btn.disabled = true;
+        btn.classList.remove('btn-info');
+        btn.classList.add('btn-secondary');
+    }
+
+    processingFiles.add(filename);
+
     try {
         const response = await fetch(`/api/recordings/${filename}/transcribe`, { method: 'POST' });
         if (response.ok) {
-            alert('Transcription started. It will appear once finished (refresh the page).');
-            // We could poll or just let the user refresh
+            // Success - do nothing, let the polling update the UI
         } else {
+            processingFiles.delete(filename);
             alert('Failed to start transcription');
+            loadFiles(); // Restore state
         }
     } catch (error) {
         console.error('Error starting transcription:', error);
+        processingFiles.delete(filename);
         alert('Error starting transcription');
+        loadFiles(); // Restore state
     }
 }
 
