@@ -26,6 +26,12 @@ A Node.js RTMP server that receives streams from OBS and restreams them to multi
    sudo apt install ffmpeg
    ```
 
+   Install quill (for transcriptions).
+   Check out [quill](https://github.com/cleanunicorn/quill) for more details.
+   ```
+   uv tool install . --python 3.12
+   ```
+
 2. **Configure your stream keys:**
    ```bash
    cp config.example.yaml config.yaml
