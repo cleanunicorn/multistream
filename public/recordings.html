@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Recordings - Multistream Server</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/recordings.css">
+    <script src="js/recordings.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>
+            Recordings
+            <a href="/" class="back-link">← Back to Dashboard</a>
+        </h1>
+
+        <div id="fileList">Loading...</div>
+
+        <div id="videoModal" class="modal">
+            <div class="modal-content video-content">
+                <div class="modal-header">
+                    <span id="videoTitle">Playing...</span>
+                    <span class="close-modal" onclick="closeModal('videoModal')">&times;</span>
+                </div>
+                <video id="player" controls></video>
+            </div>
+        </div>
+
+        <div id="textModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <span id="textTitle">Transcription</span>
+                    <span class="close-modal" onclick="closeModal('textModal')">&times;</span>
+                </div>
+                <div class="transcription-container">
+                    <div id="textContent" class="transcription-text">Loading...</div>
+                    <div id="highlightsContent" class="highlights-list">
+                        <div style="text-align: center; color: #856404;">Loading highlights...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

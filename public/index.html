@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Multistream Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+  <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+  <script src="js/dashboard.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <h1>Multistream Server</h1>
+      <a href="recordings.html" style="text-decoration: none; background-color: #0099cc; color: white; padding: 8px 15px; border-radius: 4px; font-weight: bold;">View Recordings</a>
+    </div>
+    
+    <div class="reload-section">
+      <h3>Configuration</h3>
+      <p>Configuration file is watched automatically, or you can reload manually:</p>
+      <button id="reloadButton" class="reload-button" onclick="reloadConfig()">Reload Config</button>
+      <span id="reloadStatus" class="reload-status"></span>
+    </div>
+    
+    <h2>Platform Status</h2>
+    <div id="platforms">Loading...</div>
+    
+    <div class="debug-section">
+      <div class="player-controls">
+        <h2>Debug Stream Player</h2>
+        <label class="toggle-switch">
+          <input type="checkbox" id="playerToggle" onchange="togglePlayer(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div id="playerStatusText" style="margin-bottom: 10px; font-style: italic;">Player is disabled to save resources</div>
+      
+      <div id="playerContainer" style="display: none;">
+        <div id="streamStatus" class="stream-status stream-inactive">Stream Not Active</div>
+        <div class="video-container" id="videoWrapper">
+          <video id="videoPlayer" controls></video>
+        </div>
+        <p><small>The debug stream will appear here when browser_debug platform is enabled and a stream is active.</small></p>
+      </div>
+    </div>
+    <div class="info-box">
+      <h3 class="collapsible collapsed" onclick="toggleCollapse('obsConfig')">OBS Configuration</h3>
+      <div id="obsConfig" class="collapsible-content collapsed">
+        <p><strong>Server:</strong> <code>rtmp://localhost:1935/live</code></p>
+        <p><strong>Stream Key:</strong> <code>stream</code></p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
