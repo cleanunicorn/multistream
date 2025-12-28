@@ -151,7 +151,9 @@ export function createAPIServer(streamManagerInstance) {
   app.use(fileUpload({
     limits: { fileSize: 50 * 1024 * 1024 * 1024 }, // 50GB limit
     abortOnLimit: true,
-    createParentPath: true
+    createParentPath: true,
+    useTempFiles: true,
+    tempFileDir: path.join(process.cwd(), 'tmp')
   }));
 
   app.post('/api/recordings/upload', (req, res) => {
