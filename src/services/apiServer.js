@@ -549,7 +549,8 @@ export function createAPIServer(streamManagerInstance) {
 
     // Using ffmpeg to extract clip
     // -ss placed before -i for faster seeking
-    const ffmpegCommand = `ffmpeg -ss ${startTime} -i "${videoPath}" -t ${duration} -c copy -y "${outputPath}"`;
+    // Re-encoding to ensure frame accuracy and sync
+    const ffmpegCommand = `ffmpeg -ss ${startTime} -i "${videoPath}" -t ${duration} -c:v libx264 -c:a aac -preset fast -y "${outputPath}"`;
 
     logger.info(`Generating clip: ${ffmpegCommand}`);
 
