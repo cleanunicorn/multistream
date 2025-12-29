@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Player</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/recordings.css">
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #1a1a1a;
+            overflow: hidden;
+            /* Prevent body scroll */
+        }
+
+        .player-container {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+            padding: 20px;
+            gap: 20px;
+            box-sizing: border-box;
+        }
+
+        .left-pane {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            min-width: 0;
+            /* Fix flex overflow */
+        }
+
+        .right-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            min-width: 350px;
+            max-width: 500px;
+        }
+
+        .video-wrapper {
+            flex: 1;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video {
+            width: 100%;
+            max-height: 100%;
+            outline: none;
+        }
+
+        .controls-wrapper {
+            background: #2d2d2d;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+
+        .transcript-wrapper,
+        .highlights-wrapper {
+            background: #2d2d2d;
+            border-radius: 8px;
+            border: 1px solid #444;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .transcript-wrapper {
+            flex: 2;
+        }
+
+        .highlights-wrapper {
+            flex: 1;
+            min-height: 200px;
+        }
+
+        .section-header {
+            padding: 10px 15px;
+            background: #333;
+            border-bottom: 1px solid #444;
+            color: #fff;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .header-info {
+            color: #aaa;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="player-container">
+        <div class="left-pane">
+            <div class="header-info">
+                <h4 id="videoTitle" style="color: white; margin: 0;">Loading...</h4>
+            </div>
+            <div class="video-wrapper">
+                <video id="player" controls></video>
+            </div>
+            <div class="controls-wrapper">
+                <div class="player-controls">
+                    <div class="control-group">
+                        <button onclick="adjustTime(-30)" class="btn btn-sm btn-secondary" title="-30s">⏪ -30s</button>
+                        <button onclick="adjustTime(-10)" class="btn btn-sm btn-secondary" title="-10s">⏪ -10s</button>
+                        <button onclick="adjustTime(10)" class="btn btn-sm btn-secondary" title="+10s">+10s ⏩</button>
+                        <button onclick="adjustTime(30)" class="btn btn-sm btn-secondary" title="+30s">+30s ⏩</button>
+                    </div>
+                    <div class="control-group">
+                        <select onchange="setPlaybackSpeed(this.value)" class="speed-select" title="Playback Speed">
+                            <option value="0.5">0.5x</option>
+                            <option value="1" selected>1x</option>
+                            <option value="1.5">1.5x</option>
+                            <option value="2">2x</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <button onclick="clipCurrentTime()" class="btn btn-sm btn-info"
+                            title="Clip around current time">🎬 Clip Current</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-pane">
+            <div class="transcript-wrapper">
+                <div class="section-header">Transcript</div>
+                <div id="textContent" class="transcription-text section-content">Loading...</div>
+            </div>
+            <div class="highlights-wrapper">
+                <div class="section-header">Highlights</div>
+                <div id="highlightsContent" class="section-content">
+                    <div style="text-align: center; color: #888; padding: 20px;">No highlights found.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/player.js"></script>
+</body>
+
+</html>

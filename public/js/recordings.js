@@ -3,26 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Auto-refresh every 5 seconds
     setInterval(() => {
-        // Only refresh if no modal is open to avoid disrupting user
-        const textModal = document.getElementById('textModal');
-        const videoModal = document.getElementById('videoModal');
-
-        if (textModal.style.display !== 'flex' && videoModal.style.display !== 'flex') {
-            loadFiles();
-        }
+        loadFiles();
     }, 5000);
-
-    // Close modal on click outside
-    window.onclick = function (event) {
-        const videoModal = document.getElementById('videoModal');
-        const textModal = document.getElementById('textModal');
-        if (event.target == videoModal) {
-            closeModal('videoModal');
-        }
-        if (event.target == textModal) {
-            closeModal('textModal');
-        }
-    }
 });
 
 const processingFiles = new Set();
@@ -60,26 +42,21 @@ async function loadFiles() {
                 processingFiles.delete(file.name);
             }
 
-            let transcriptionBtn = '';
-            if (file.hasTranscription) {
-                transcriptionBtn = `<button onclick="viewTranscription('${file.name}')" class="btn btn-info">View Transcription</button>`;
-            } else if (file.isProcessing || processingFiles.has(file.name)) {
-                transcriptionBtn = `<button class="btn btn-secondary" disabled>Processing...</button>`;
-            } else {
-                transcriptionBtn = `<button onclick="transcribe('${file.name}', this)" class="btn btn-info">Transcribe</button>`;
-            }
-
             const displayName = formatDisplayName(file.name);
 
+            // Consolidated Actions
             html += `
                 <tr>
                 <td>${displayName}</td>
                 <td>${date}</td>
                 <td>${size}</td>
                 <td class="actions">
-                    <button onclick="playVideo('${file.url}', '${file.name}')" class="btn btn-primary">Play</button>
+                    <button onclick="openPlayer('${file.name}')" class="btn btn-primary">Play & Review</button>
+                    ${!file.hasTranscription && !file.isProcessing && !processingFiles.has(file.name) ?
+                    `<button onclick="transcribe('${file.name}', this)" class="btn btn-info">Transcribe</button>` : ''}
+                    ${file.isProcessing || processingFiles.has(file.name) ?
+                    `<button class="btn btn-secondary" disabled>Processing...</button>` : ''}
                     <a href="${file.url}" download class="btn btn-secondary">Download</a>
-                    ${transcriptionBtn}
                     <button onclick="deleteRecording('${file.name}')" class="btn btn-danger">Delete</button>
                 </td>
                 </tr>
@@ -142,58 +119,8 @@ async function transcribe(filename, btn) {
     }
 }
 
-async function viewTranscription(filename) {
-    const modal = document.getElementById('textModal');
-    const contentDiv = document.getElementById('textContent');
-    const highlightsDiv = document.getElementById('highlightsContent');
-    const titleEl = document.getElementById('textTitle');
-
-    titleEl.textContent = `Transcription: ${filename}`;
-    contentDiv.innerHTML = 'Loading...';
-    highlightsDiv.innerHTML = 'Loading...';
-    modal.style.display = 'flex';
-
-    try {
-        const response = await fetch(`/api/recordings/${filename}/transcription`);
-        const data = await response.json();
-
-        if (data.success) {
-            // Fix formatting by using a pre element
-            contentDiv.innerHTML = '';
-            const pre = document.createElement('pre');
-            pre.style.whiteSpace = 'pre-wrap';
-            pre.style.margin = '0';
-            pre.style.fontFamily = 'monospace';
-            pre.style.border = 'none';
-            pre.style.background = 'transparent';
-            pre.textContent = data.content;
-            contentDiv.appendChild(pre);
-
-            if (data.highlights && data.highlights.length > 0) {
-                let highlightsHtml = '<h3>Highlights ("clip that")</h3>';
-                data.highlights.forEach(h => {
-                    highlightsHtml += `
-                    <div class="highlight-item">
-                    <div class="highlight-time">${h.timestamp}</div>
-                    <div class="highlight-text">${h.text}</div>
-                    <button onclick="previewClip('${filename}', '${h.timestamp}', this)" class="btn btn-info" style="margin-top:5px; font-size: 12px; padding: 3px 8px; margin-right: 5px;">Preview Clip</button>
-                    <button onclick="downloadClip('${filename}', '${h.timestamp}', this)" class="btn btn-secondary" style="margin-top:5px; font-size: 12px; padding: 3px 8px;">Download Clip</button>
-                    </div>
-                `;
-                });
-                highlightsDiv.innerHTML = highlightsHtml;
-            } else {
-                highlightsDiv.innerHTML = '<h3>Highlights</h3><div style="font-style:italic; color:#666;">No "clip that" moments found.</div>';
-            }
-        } else {
-            contentDiv.innerHTML = 'Failed to load transcription.';
-            highlightsDiv.innerHTML = '';
-        }
-    } catch (error) {
-        console.error('Error loading transcription:', error);
-        contentDiv.innerHTML = 'Error loading transcription.';
-        highlightsDiv.innerHTML = '';
-    }
+function openPlayer(filename) {
+    window.open(`/player.html?recording=${encodeURIComponent(filename)}`, '_blank');
 }
 
 function formatDisplayName(filename) {
@@ -233,108 +160,6 @@ function formatSize(bytes) {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-function playVideo(url, title) {
-    const modal = document.getElementById('videoModal');
-    const video = document.getElementById('player');
-    const titleEl = document.getElementById('videoTitle');
-
-    titleEl.textContent = title;
-    video.src = url;
-    modal.style.display = 'flex';
-
-    // Try to play
-    video.play().catch(e => console.error('Play error:', e));
-}
-
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-
-    if (modalId === 'videoModal') {
-        const video = document.getElementById('player');
-        video.pause();
-        video.src = '';
-    }
-
-    modal.style.display = 'none';
-}
-
-async function previewClip(filename, timestamp, btn) {
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Preparing...';
-
-    try {
-        const response = await fetch(`/api/recordings/${filename}/clip`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ timestamp })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            playVideo(result.url, `Preview: ${timestamp}`);
-            btn.textContent = 'Playing...';
-            setTimeout(() => {
-                btn.textContent = originalText;
-                btn.disabled = false;
-            }, 1000);
-        } else {
-            alert('Failed to preview clip: ' + (result.error || 'Unknown error'));
-            btn.textContent = originalText;
-            btn.disabled = false;
-        }
-    } catch (error) {
-        console.error('Error previewing clip:', error);
-        alert('Error previewing clip');
-        btn.textContent = originalText;
-        btn.disabled = false;
-    }
-}
-
-async function downloadClip(filename, timestamp, btn) {
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Generating...';
-
-    try {
-        const response = await fetch(`/api/recordings/${filename}/clip`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ timestamp })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            const a = document.createElement('a');
-            a.href = result.url;
-            a.download = '';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            btn.textContent = 'Done!';
-            setTimeout(() => {
-                btn.textContent = originalText;
-                btn.disabled = false;
-            }, 3000);
-        } else {
-            alert('Failed to generate clip: ' + (result.error || 'Unknown error'));
-            btn.textContent = originalText;
-            btn.disabled = false;
-        }
-    } catch (error) {
-        console.error('Error generating clip:', error);
-        alert('Error generating clip');
-        btn.textContent = originalText;
-        btn.disabled = false;
-    }
 }
 
 function uploadVideo(input) {
