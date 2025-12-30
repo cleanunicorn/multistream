@@ -40,6 +40,9 @@ server:
   rtmpPort: 1935
   httpPort: 8000
 
+transcription:
+  model: large # Options: tiny, base, small, medium, large
+
 # You can add more platforms by following the same structure
 # custom_platform:
 #   enabled: false

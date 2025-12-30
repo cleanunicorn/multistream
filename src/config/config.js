@@ -40,12 +40,15 @@ const defaultConfig = {
     enabled: false,
     path: './recordings',
     format: 'mp4'
+  },
+  transcription: {
+    model: 'large'
   }
 };
 
 export function loadConfig() {
   let config = { ...defaultConfig };
-  
+
   // Load from config.yaml if exists
   const configPath = path.join(process.cwd(), 'config.yaml');
   if (fs.existsSync(configPath)) {
@@ -54,13 +57,13 @@ export function loadConfig() {
   } else {
     throw new Error('config.yaml not found. Please create a config.yaml file based on config.example.yaml');
   }
-  
+
   return config;
 }
 
 function mergeConfig(target, source) {
   const result = { ...target };
-  
+
   for (const key in source) {
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
       result[key] = mergeConfig(result[key] || {}, source[key]);
@@ -68,7 +71,7 @@ function mergeConfig(target, source) {
       result[key] = source[key];
     }
   }
-  
+
   return result;
 }
 
@@ -78,18 +81,18 @@ let currentConfig = null;
 // Watch config file for changes
 export function watchConfig() {
   const configPath = path.join(process.cwd(), 'config.yaml');
-  
+
   let fsWait = false;
   fs.watchFile(configPath, { interval: 1000 }, (curr, prev) => {
     if (fsWait) return;
     fsWait = true;
-    
+
     setTimeout(() => {
       fsWait = false;
-      
+
       try {
         const newConfig = loadConfig();
-        
+
         // Check if config actually changed
         if (JSON.stringify(newConfig) !== JSON.stringify(currentConfig)) {
           logger.info('Configuration file changed, reloading...');
@@ -101,7 +104,7 @@ export function watchConfig() {
       }
     }, 100);
   });
-  
+
   logger.info('Watching config.yaml for changes...');
 }
 

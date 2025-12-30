@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import fs from 'fs';
 import logger from './logger.js';
+import { loadConfig } from '../config/config.js';
 
 /**
  * Transcribes a video file using Quill with atomic output creation.
@@ -12,8 +13,21 @@ export function transcribeFile(videoPath, callback) {
     const txtOutput = videoPath.substring(0, videoPath.lastIndexOf('.')) + '.txt';
     const tmpOutput = txtOutput + '.tmp';
 
+    // Load config to get model
+    const config = loadConfig();
+    let model = 'large';
+
+    if (config.transcription && config.transcription.model) {
+        const validModels = ['tiny', 'base', 'small', 'medium', 'large'];
+        if (validModels.includes(config.transcription.model)) {
+            model = config.transcription.model;
+        } else {
+            logger.warn(`Invalid transcription model '${config.transcription.model}', falling back to 'large'`);
+        }
+    }
+
     // Quill command: output to temp file first
-    const quillCommand = `quill -t "${videoPath}" "${tmpOutput}" --language en`;
+    const quillCommand = `quill -m ${model} -t "${videoPath}" "${tmpOutput}" --language en`;
 
     logger.info(`Starting transcription: ${quillCommand}`);
 
