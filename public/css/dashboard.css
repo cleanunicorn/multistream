@@ -208,7 +208,7 @@ code {
 }
 
 .collapsible-content.expanded {
-    max-height: 200px;
+    max-height: 1000px;
 }
 
 .player-controls {
@@ -216,4 +216,91 @@ code {
     align-items: center;
     margin-bottom: 10px;
     justify-content: space-between;
+}
+
+/* Config Table Styles */
+.config-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    background-color: white;
+}
+
+.config-table th,
+.config-table td {
+    padding: 10px;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+.config-table th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+.url-code {
+    word-break: break-all;
+    font-size: 0.9em;
+}
+
+.key-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stream-key-input {
+    border: 1px solid #ccc;
+    padding: 5px;
+    border-radius: 3px;
+    flex-grow: 1;
+    font-family: monospace;
+    background-color: #f9f9f9;
+}
+
+.icon-button {
+    background: none;
+    border: 1px solid #ccc;
+    padding: 5px;
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 1.2em;
+}
+
+.icon-button:hover {
+    background-color: #f0f0f0;
+}
+
+.settings-json {
+    font-size: 0.85em;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 10px;
+    margin: 0;
+    max-width: 400px;
+    overflow-x: auto;
+}
+
+.global-config {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.config-block {
+    margin-bottom: 15px;
+}
+
+.config-block h5 {
+    margin-top: 0;
+    margin-bottom: 5px;
+    color: #555;
+}
+
+.text-muted {
+    color: #6c757d;
+    font-style: italic;
 }

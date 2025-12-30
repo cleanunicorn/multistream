@@ -8,7 +8,15 @@ platforms:
     streamKey: your_twitch_stream_key_here
     settings:
       # Add any platform-specific settings here
-      
+      # Strict 6000kbps CBR for Twitch
+      transcode: true
+      videoBitrate: 6000k
+      bufferSize: 12000k
+      audioBitrate: 160k
+      fps: 30
+      gop: 60 # 2 seconds keyframe interval
+      preset: veryfast
+      inputBuffer: 3000 # 3 seconds input buffer
   youtube:
     enabled: true
     rtmpUrl: rtmp://a.rtmp.youtube.com/live2
@@ -29,6 +37,7 @@ platforms:
     streamKey: debug
     settings:
       # This platform streams to the local HTTP server for browser playback
+      # Supports transcoding settings (transcode: true, videoBitrate, etc.)
       httpPath: /live/stream.flv
 
   # Virtual platform for local recording

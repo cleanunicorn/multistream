@@ -25,6 +25,13 @@ export class StreamManager {
       return;
     }
 
+    // Ignore the internal browser_debug stream to prevent recursion
+    if (this.config.platforms.browser_debug &&
+      this.config.platforms.browser_debug.streamKey === streamKey) {
+      logger.debug(`Ignoring internal debug stream: ${streamKey}`);
+      return;
+    }
+
     const inputUrl = `rtmp://localhost:1935${streamPath}`;
     const ffmpegCommands = [];
 
@@ -90,15 +97,54 @@ export class StreamManager {
       logger.info('Twitch test mode enabled: Appending ?bandwidthtest=true');
     }
 
+    const outputOptions = [
+      '-f', 'flv',
+      '-flvflags', 'no_duration_filesize'
+    ];
+
+    // Input options
+    const inputOptions = [];
+    if (platformConfig.settings && platformConfig.settings.inputBuffer) {
+      inputOptions.push('-rtmp_buffer', platformConfig.settings.inputBuffer);
+    }
+
+    // Transcoding options
+    if (platformConfig.settings && platformConfig.settings.transcode) {
+      const settings = platformConfig.settings;
+
+      // Video
+      outputOptions.push('-c:v', 'libx264');
+      if (settings.videoBitrate) {
+        outputOptions.push('-b:v', settings.videoBitrate);
+        outputOptions.push('-maxrate', settings.videoBitrate);
+      }
+      if (settings.bufferSize) {
+        outputOptions.push('-bufsize', settings.bufferSize);
+      }
+      outputOptions.push('-preset', settings.preset || 'veryfast');
+      if (settings.gop) {
+        outputOptions.push('-g', settings.gop);
+      }
+      if (settings.fps) {
+        outputOptions.push('-r', settings.fps);
+      }
+
+      // Audio
+      outputOptions.push('-c:a', 'aac');
+      if (settings.audioBitrate) {
+        outputOptions.push('-b:a', settings.audioBitrate);
+      }
+
+      logger.info(`Transcoding enabled for ${platform} with bitrate: ${settings.videoBitrate || 'default'}`);
+    } else {
+      // Passthrough (copy)
+      outputOptions.push('-c:v', 'copy');
+      outputOptions.push('-c:a', 'copy');
+    }
+
     const command = ffmpeg(inputUrl)
-      .inputOptions([
-      ])
-      .outputOptions([
-        '-c:v', 'copy',
-        '-c:a', 'copy',
-        '-f', 'flv',
-        '-flvflags', 'no_duration_filesize'
-      ])
+      .inputOptions(inputOptions)
+      .outputOptions(outputOptions)
       .output(outputUrl)
       .on('start', (cmd) => {
         logger.info(`FFmpeg started for ${platform}:`, cmd);
@@ -187,17 +233,61 @@ export class StreamManager {
   }
 
   createBrowserDebugCommand(inputUrl) {
-    const outputUrl = `http://localhost:${this.config.server.httpStreamingPort}/live/stream.flv`;
+    const platformConfig = this.config.platforms.browser_debug;
+    // We stream to RTMP locally, NMS will remux it to FLV for us.
+    // This avoids conflict with the main stream on the HTTP port.
+    const outputUrl = `rtmp://localhost:${this.config.server.rtmpPort}/live/${platformConfig.streamKey}`;
+
+    logger.info(`Creating browser debug command. Settings: ${JSON.stringify(platformConfig.settings)}`);
+
+    const outputOptions = [
+      '-f', 'flv',
+      '-flvflags', 'no_duration_filesize'
+    ];
+
+    // Input options
+    const inputOptions = [];
+    if (platformConfig.settings && platformConfig.settings.inputBuffer) {
+      inputOptions.push('-rtmp_buffer', platformConfig.settings.inputBuffer);
+    }
+
+    // Transcoding options
+    if (platformConfig.settings && platformConfig.settings.transcode) {
+      const settings = platformConfig.settings;
+
+      // Video
+      outputOptions.push('-c:v', 'libx264');
+      if (settings.videoBitrate) {
+        outputOptions.push('-b:v', settings.videoBitrate);
+        outputOptions.push('-maxrate', settings.videoBitrate);
+      }
+      if (settings.bufferSize) {
+        outputOptions.push('-bufsize', settings.bufferSize);
+      }
+      outputOptions.push('-preset', settings.preset || 'veryfast');
+      if (settings.gop) {
+        outputOptions.push('-g', settings.gop);
+      }
+      if (settings.fps) {
+        outputOptions.push('-r', settings.fps);
+      }
+
+      // Audio
+      outputOptions.push('-c:a', 'aac');
+      if (settings.audioBitrate) {
+        outputOptions.push('-b:a', settings.audioBitrate);
+      }
+
+      logger.info(`Transcoding enabled for browser_debug with bitrate: ${settings.videoBitrate || 'default'}`);
+    } else {
+      // Passthrough (copy)
+      outputOptions.push('-c:v', 'copy');
+      outputOptions.push('-c:a', 'copy');
+    }
 
     const command = ffmpeg(inputUrl)
-      .inputOptions([
-      ])
-      .outputOptions([
-        '-c:v', 'copy',
-        '-c:a', 'copy',
-        '-f', 'flv',
-        '-flvflags', 'no_duration_filesize'
-      ])
+      .inputOptions(inputOptions)
+      .outputOptions(outputOptions)
       .output(outputUrl)
       .on('start', (cmd) => {
         logger.info(`Browser debug stream started`);
@@ -303,5 +393,21 @@ export class StreamManager {
 
       logger.info(`Configuration reload complete. Active platforms: ${remainingCommands.map(c => c.platform).join(', ')}`);
     });
+  }
+  getActiveProcesses() {
+    const processes = [];
+    this.activeStreams.forEach((commands, streamKey) => {
+      commands.forEach(({ platform, command }) => {
+        // fluent-ffmpeg exposes the internal ffmpeg process via command.ffmpegProc
+        if (command.ffmpegProc && command.ffmpegProc.pid) {
+          processes.push({
+            pid: command.ffmpegProc.pid,
+            platform,
+            streamKey
+          });
+        }
+      });
+    });
+    return processes;
   }
 }

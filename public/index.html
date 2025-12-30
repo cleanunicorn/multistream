@@ -14,8 +14,11 @@
     <div style="display: flex; align-items: center; justify-content: space-between;">
       <h1>Multistream Server</h1>
       <a href="recordings.html"
-        style="text-decoration: none; background-color: #0099cc; color: white; padding: 8px 15px; border-radius: 4px; font-weight: bold;">View
+        style="text-decoration: none; background-color: #0099cc; color: white; padding: 8px 15px; border-radius: 4px; font-weight: bold; margin-left: 10px;">View
         Recordings</a>
+      <a href="resources.html"
+        style="text-decoration: none; background-color: #6c757d; color: white; padding: 8px 15px; border-radius: 4px; font-weight: bold; margin-left: 10px;">View
+        Resources</a>
     </div>
 
 
@@ -54,6 +57,13 @@
       <div id="obsConfig" class="collapsible-content collapsed">
         <p><strong>Server:</strong> <code>rtmp://localhost:1935/live</code></p>
         <p><strong>Stream Key:</strong> <code>stream</code></p>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <h3 class="collapsible collapsed" onclick="toggleCollapse('streamConfig')">Stream Configuration</h3>
+      <div id="streamConfig" class="collapsible-content collapsed">
+        <div id="configContainer">Loading...</div>
       </div>
     </div>
   </div>

@@ -95,7 +95,7 @@ async function loadStatus() {
                 word.charAt(0).toUpperCase() + word.slice(1)
             ).join(' ');
 
-            const hasKey = platform.hasKey || name === 'browser_debug';
+            const hasKey = (platform.streamKey && platform.streamKey.length > 0) || platform.hasKey || name === 'browser_debug';
             const canToggle = hasKey;
 
             div.innerHTML = `
@@ -140,9 +140,74 @@ async function loadStatus() {
             clearInterval(streamCheckInterval);
             streamCheckInterval = null;
         }
+
+        updateConfigDisplay(config);
     } catch (error) {
         console.error(error);
         document.getElementById('platforms').innerHTML = 'Error loading status';
+        document.getElementById('configContainer').innerHTML = 'Error loading config';
+    }
+}
+
+function updateConfigDisplay(config) {
+    const container = document.getElementById('configContainer');
+    let html = '<table class="config-table">';
+    html += '<tr><th>Platform</th><th>RTMP URL</th><th>Stream Key</th><th>Settings</th></tr>';
+
+    Object.entries(config.platforms).forEach(([name, platform]) => {
+        if (name === 'recording' || name === 'browser_debug') return;
+
+        const displayName = name.split('_').map(word =>
+            word.charAt(0).toUpperCase() + word.slice(1)
+        ).join(' ');
+
+        // Format settings
+        const settingsHtml = platform.settings && Object.keys(platform.settings).length > 0
+            ? `<pre class="settings-json">${JSON.stringify(platform.settings, null, 2)}</pre>`
+            : '<span class="text-muted">Default</span>';
+
+        html += `
+            <tr>
+                <td><strong>${displayName}</strong></td>
+                <td><code class="url-code">${platform.rtmpUrl}</code></td>
+                <td>
+                    <div class="key-container">
+                        <input type="password" readonly value="${platform.streamKey || ''}" id="key-${name}" class="stream-key-input">
+                        <button class="icon-button" onclick="toggleKeyVisibility('key-${name}')" title="Show/Hide Key">👁️</button>
+                    </div>
+                </td>
+                <td>${settingsHtml}</td>
+            </tr>
+        `;
+    });
+
+    html += '</table>';
+
+    // Global Config Section
+    html += '<div class="global-config">';
+    html += '<h4>Global Configuration</h4>';
+
+    if (config.server) {
+        html += '<div class="config-block"><h5>Server</h5>';
+        html += `<pre class="settings-json">${JSON.stringify(config.server, null, 2)}</pre></div>`;
+    }
+
+    if (config.transcription) {
+        html += '<div class="config-block"><h5>Transcription</h5>';
+        html += `<pre class="settings-json">${JSON.stringify(config.transcription, null, 2)}</pre></div>`;
+    }
+
+    html += '</div>';
+
+    container.innerHTML = html;
+}
+
+function toggleKeyVisibility(elementId) {
+    const input = document.getElementById(elementId);
+    if (input.type === 'password') {
+        input.type = 'text';
+    } else {
+        input.type = 'password';
     }
 }
 
@@ -206,44 +271,54 @@ function checkAndPlayStream() {
         });
 }
 
-function initializePlayer() {
+async function initializePlayer() {
     if (flvPlayer || !flvjs.isSupported() || !playerEnabled) return;
 
-    const video = document.getElementById('videoPlayer');
-    // Use absolute path or relative, but ensure it goes through proxy
-    const streamUrl = window.location.origin + '/live/stream.flv';
+    try {
+        // Fetch config to get the correct stream key for debug
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        const streamKey = config.platforms.browser_debug?.streamKey || 'stream';
 
-    flvPlayer = flvjs.createPlayer({
-        type: 'flv',
-        url: streamUrl,
-        isLive: true,
-        enableStashBuffer: false,
-        stashInitialSize: 128,
-        enableWorker: true,
-        lazyLoadMaxDuration: 3 * 60,
-        seekType: 'range'
-    });
+        const video = document.getElementById('videoPlayer');
+        // Use absolute path or relative, but ensure it goes through proxy
+        // NMS remuxes RTMP /live/<key> to HTTP /live/<key>.flv
+        const streamUrl = window.location.origin + `/live/${streamKey}.flv`;
 
-    flvPlayer.attachMediaElement(video);
-    flvPlayer.load();
-
-    flvPlayer.on(flvjs.Events.METADATA_ARRIVED, () => {
-        updateStreamStatus(true);
-        flvPlayer.play().catch(e => {
-            console.log('Autoplay prevented:', e);
-            // Add a play button if autoplay fails
-            video.controls = true;
+        flvPlayer = flvjs.createPlayer({
+            type: 'flv',
+            url: streamUrl,
+            isLive: true,
+            enableStashBuffer: false,
+            stashInitialSize: 128,
+            enableWorker: true,
+            lazyLoadMaxDuration: 3 * 60,
+            seekType: 'range'
         });
-    });
 
-    flvPlayer.on(flvjs.Events.ERROR, (errorType, errorDetail) => {
-        console.error('FLV playback error:', errorType, errorDetail);
-        updateStreamStatus(false);
-        if (flvPlayer) {
-            flvPlayer.destroy();
-            flvPlayer = null;
-        }
-    });
+        flvPlayer.attachMediaElement(video);
+        flvPlayer.load();
+
+        flvPlayer.on(flvjs.Events.METADATA_ARRIVED, () => {
+            updateStreamStatus(true);
+            flvPlayer.play().catch(e => {
+                console.log('Autoplay prevented:', e);
+                // Add a play button if autoplay fails
+                video.controls = true;
+            });
+        });
+
+        flvPlayer.on(flvjs.Events.ERROR, (errorType, errorDetail) => {
+            console.error('FLV playback error:', errorType, errorDetail);
+            updateStreamStatus(false);
+            if (flvPlayer) {
+                flvPlayer.destroy();
+                flvPlayer = null;
+            }
+        });
+    } catch (error) {
+        console.error('Error initializing player:', error);
+    }
 }
 
 function updateStreamStatus(isActive) {

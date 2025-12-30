@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import yaml from 'yaml';
 import { transcribeFile } from '../utils/transcription.js';
+import { getSystemStats, getProcessStats } from '../utils/systemStats.js';
 import fileUpload from 'express-fileupload';
 
 let streamManager = null;
@@ -42,6 +43,40 @@ export function createAPIServer(streamManagerInstance) {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // Resource Monitoring Endpoint
+  app.get('/api/resources', async (req, res) => {
+    try {
+      const systemStats = getSystemStats();
+
+      // Get main process stats
+      const mainPid = process.pid;
+
+      // Get ffmpeg processes
+      const activeProcesses = streamManager ? streamManager.getActiveProcesses() : [];
+      const ffmpegPids = activeProcesses.map(p => p.pid);
+
+      const allPids = [mainPid, ...ffmpegPids];
+      const processStats = await getProcessStats(allPids);
+
+      res.json({
+        system: systemStats,
+        processes: {
+          main: {
+            pid: mainPid,
+            stats: processStats[mainPid] || { cpu: 0, memory: 0 }
+          },
+          streams: activeProcesses.map(proc => ({
+            ...proc,
+            stats: processStats[proc.pid] || { cpu: 0, memory: 0 }
+          }))
+        }
+      });
+    } catch (error) {
+      logger.error('Error fetching resource stats:', error);
+      res.status(500).json({ error: 'Failed to fetch resource stats' });
+    }
+  });
+
   // Get current configuration (without sensitive data)
   app.get('/api/config', (req, res) => {
     const config = loadConfig();
@@ -53,8 +88,9 @@ export function createAPIServer(streamManagerInstance) {
       safeConfig.platforms[platform] = {
         enabled: config.platforms[platform].enabled,
         rtmpUrl: config.platforms[platform].rtmpUrl,
-        hasKey: !!config.platforms[platform].streamKey,
-        test_mode: config.platforms[platform].test_mode || false
+        streamKey: config.platforms[platform].streamKey || '',
+        test_mode: config.platforms[platform].test_mode || false,
+        settings: config.platforms[platform].settings || {}
       };
     });
 
@@ -64,16 +100,25 @@ export function createAPIServer(streamManagerInstance) {
         enabled: config.recording.enabled,
         rtmpUrl: 'Local Recording',
         hasKey: true,
-        format: config.recording.format || 'mp4'
+        format: config.recording.format || 'mp4',
+        settings: {
+          path: config.recording.path,
+          format: config.recording.format
+        }
       };
     } else {
       // Default state if not configured
       safeConfig.platforms.recording = {
         enabled: false,
         rtmpUrl: 'Local Recording',
-        hasKey: true
+        hasKey: true,
+        settings: {}
       };
     }
+
+    // Add global config
+    safeConfig.server = config.server;
+    safeConfig.transcription = config.transcription;
 
     res.json(safeConfig);
   });
