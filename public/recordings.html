@@ -1,42 +1,96 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
-    <title>Recordings - Multistream Server</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/recordings.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recordings - Multistream</title>
+    <link rel="stylesheet" href="css/main.css">
+    <script src="js/ui.js"></script>
     <script src="js/recordings.js"></script>
+    <style>
+        /* Override max-width for recordings page to use full horizontal space */
+        .main-content {
+            max-width: none !important;
+        }
+    </style>
 </head>
 
 <body>
-    <div class="container">
-        <h1>
-            Recordings
-            <a href="/" class="back-link">← Back to Dashboard</a>
-        </h1>
+    <div class="flex justify-between items-center mb-4">
+        <div>
+            <h1>Recordings</h1>
+            <p class="text-secondary text-sm">Manage and view your recorded streams</p>
+        </div>
+        <a href="/" class="btn btn-secondary">
+            <span>←</span> Back
+        </a>
+    </div>
 
-        <div class="upload-section" style="margin-bottom: 20px;">
-            <button onclick="document.getElementById('videoUpload').click()" class="btn btn-primary">Upload
-                Video(s)</button>
+    <div class="card mb-4">
+        <div class="upload-files-container flex flex-col items-center p-4 border rounded border-dashed cursor-pointer bg-surface-hover hover:bg-surface"
+            onclick="document.getElementById('videoUpload').click()" style="border-style: dashed; border-width: 2px;">
+            <div class="mb-2 text-primary" style="font-size: 24px;">☁️</div>
+            <h3 class="mb-2">Upload Video(s)</h3>
+            <p class="text-secondary text-sm">Click (or drop) to select files to upload</p>
             <input type="file" id="videoUpload" accept="video/*" multiple style="display: none;"
                 onchange="uploadVideo(this)">
-            <div id="uploadContainer" style="display: none; margin-top: 10px; max-width: 500px;">
-                <div style="margin-bottom: 5px;">
-                    <span id="uploadStatus">Uploading...</span>
-                    <span id="uploadPercent" style="float: right;">0%</span>
-                </div>
-                <div class="progress-bar-container"
-                    style="width: 100%; background-color: #ddd; height: 20px; border-radius: 4px; overflow: hidden;">
-                    <div id="uploadProgressBar"
-                        style="width: 0%; height: 100%; background-color: #4CAF50; transition: width 0.2s;"></div>
-                </div>
-            </div>
-            <span id="uploadResult" style="margin-left: 10px; font-style: italic;"></span>
         </div>
 
-        <div id="fileList">Loading...</div>
+        <div id="uploadContainer" class="hidden mt-4">
+            <div class="flex justify-between mb-2 text-sm">
+                <span id="uploadStatus">Uploading...</span>
+                <span id="uploadPercent">0%</span>
+            </div>
+            <div
+                style="width: 100%; background-color: var(--bg-body); height: 8px; border-radius: 4px; overflow: hidden;">
+                <div id="uploadProgressBar"
+                    style="width: 0%; height: 100%; background-color: var(--accent-success); transition: width 0.2s;">
+                </div>
+            </div>
+        </div>
+        <div id="uploadResult" class="mt-2 text-sm text-center"></div>
+    </div>
 
+    <div class="card">
+        <div id="fileList">Loading recordings...</div>
+    </div>
 
+    <!-- Video Modal -->
+    <div id="videoModal" class="modal">
+        <div class="modal-content" style="max-width: 1200px; width: 95%;">
+            <div class="modal-header">
+                <span id="modalTitle">Video Preview</span>
+                <span class="close-modal" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="grid-2"
+                style="grid-template-columns: 2fr 1fr; gap: 20px; display: flex; flex-direction: column;">
+                <!-- JS toggles flex/grid styles often so we need to be careful. 
+                      Ideally we structure this so we can apply grid classes. 
+                      The JS might be injecting specific styles. 
+                      Let's stick to a generic container that the JS populates or we pre-populate.
+                 -->
+                <div style="display: flex; gap: 20px; height: 70vh; flex-direction: row;" id="modalBody">
+                    <!-- Video Section -->
+                    <div style="flex: 2; display: flex; flex-direction: column; gap: 10px;">
+                        <video id="videoPlayerModal" controls style="width: 100%; background: black; flex: 1;"></video>
+                    </div>
+
+                    <!-- Transcription / Highlights Section -->
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 300px;">
+                        <div
+                            style="display: flex; gap: 10px; background: var(--bg-body); padding: 5px; border-radius: 4px;">
+                            <button class="btn btn-sm btn-primary" style="flex: 1;">Transcript</button>
+                        </div>
+                        <div id="transcriptionText" class="transcription-text"
+                            style="flex: 1; background: var(--bg-body); border: 1px solid var(--border-color); padding: 10px;">
+                            Loading transcription...
+                        </div>
+                        <div id="highlightsList" class="highlights-list" style="height: 15vh; display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </body>
 

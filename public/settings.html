@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Multistream</title>
+    <link rel="stylesheet" href="css/main.css">
+    <script src="js/ui.js"></script>
+    <script src="js/dashboard.js"></script>
+</head>
+
+<body>
+    <div class="flex justify-between items-center mb-4">
+        <div>
+            <h1>Settings</h1>
+            <p class="text-secondary text-sm">Application and stream configuration</p>
+        </div>
+        <div class="flex gap-2">
+            <button id="reloadButton" class="btn btn-secondary" onclick="reloadConfig()">
+                <span>🔄</span> Reload Config
+            </button>
+            <span id="reloadStatus" class="reload-status"></span>
+        </div>
+    </div>
+
+    <div class="flex flex-col gap-4">
+        <div class="card">
+            <h3 class="">OBS Configuration</h3>
+            <div id="obsConfig" class="mt-4">
+                <div class="flex flex-col gap-2">
+                    <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
+                        <span class="text-secondary">Server</span>
+                        <code class="text-primary">rtmp://localhost:1935/live</code>
+                    </div>
+                    <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
+                        <span class="text-secondary">Stream Key</span>
+                        <code class="text-primary">stream</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Stream Configuration (config.yaml)</h3>
+            <div id="configContainer">Loading configuration...</div>
+        </div>
+    </div>
+</body>
+
+</html>

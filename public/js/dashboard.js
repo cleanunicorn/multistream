@@ -7,7 +7,10 @@ let streamCheckInterval = null;
 
 // Initial setup
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('playerToggle').checked = playerEnabled;
+    const playerToggle = document.getElementById('playerToggle');
+    if (playerToggle) {
+        playerToggle.checked = playerEnabled;
+    }
     updatePlayerVisibility();
     loadStatus();
 });
@@ -32,6 +35,8 @@ function updatePlayerVisibility() {
     const container = document.getElementById('playerContainer');
     const statusText = document.getElementById('playerStatusText');
     const videoWrapper = document.getElementById('videoWrapper');
+
+    if (!container || !statusText || !videoWrapper) return;
 
     if (playerEnabled) {
         container.style.display = 'block';
@@ -86,73 +91,91 @@ async function loadStatus() {
         const response = await fetch('/api/config');
         const config = await response.json();
         const platformsDiv = document.getElementById('platforms');
-        platformsDiv.innerHTML = '';
+        if (platformsDiv) {
+            platformsDiv.innerHTML = '';
 
-        Object.entries(config.platforms).forEach(([name, platform]) => {
-            const div = document.createElement('div');
-            div.className = 'platform';
-            const displayName = name.split('_').map(word =>
-                word.charAt(0).toUpperCase() + word.slice(1)
-            ).join(' ');
+            Object.entries(config.platforms).forEach(([name, platform]) => {
+                const div = document.createElement('div');
+                div.className = 'platform';
+                const displayName = name.split('_').map(word =>
+                    word.charAt(0).toUpperCase() + word.slice(1)
+                ).join(' ');
 
-            const hasKey = (platform.streamKey && platform.streamKey.length > 0) || platform.hasKey || name === 'browser_debug';
-            const canToggle = hasKey;
+                const hasKey = (platform.streamKey && platform.streamKey.length > 0) || platform.hasKey || name === 'browser_debug';
+                const canToggle = hasKey;
 
-            div.innerHTML = `
-        <div class="platform-info">
-          <span>${displayName}</span>
-          <span class="${platform.enabled ? 'enabled' : 'disabled'}">
-            ${platform.enabled ? '✓ Enabled' : '✗ Disabled'}
-            ${!hasKey && name !== 'recording' ? ' (No key configured)' : ''}
-          </span>
-          ${name === 'recording' ? `
-            <select onchange="updateRecordingFormat(this.value)" style="margin-left: 10px; padding: 2px;">
-              <option value="mp4" ${platform.format === 'mp4' ? 'selected' : ''}>MP4</option>
-              <option value="mkv" ${platform.format === 'mkv' ? 'selected' : ''}>MKV</option>
-              <option value="flv" ${platform.format === 'flv' ? 'selected' : ''}>FLV</option>
-            </select>
-          ` : ''}
-          ${name === 'twitch' ? `
-            <div style="margin-left: 15px; display: flex; align-items: center; font-size: 0.9em;">
-              <input type="checkbox" id="twitchTestMode" 
-                ${platform.test_mode ? 'checked' : ''} 
-                onchange="toggleTestMode('${name}', this)">
-              <label for="twitchTestMode" style="margin-left: 5px; cursor: pointer;" title="Appends ?bandwidthtest=true to stream key">Test Mode (No Live)</label>
+                const isRecording = name === 'recording';
+
+                div.innerHTML = `
+            <div class="platform-info">
+              <span>${displayName}</span>
+              <span class="${platform.enabled ? 'enabled' : 'disabled'}">
+                ${platform.enabled ? '✓ Enabled' : '✗ Disabled'}
+                ${!hasKey && !isRecording ? ' (No key configured)' : ''}
+              </span>
+              ${isRecording ? `
+                <div style="display: inline-block; margin-left: 10px;">
+                    <select onchange="updateRecordingFormat(this.value)" style="padding: 2px 6px; background: var(--bg-body); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; font-size: 0.9em;">
+                      <option value="mp4" ${platform.format === 'mp4' ? 'selected' : ''}>MP4</option>
+                      <option value="mkv" ${platform.format === 'mkv' ? 'selected' : ''}>MKV</option>
+                      <option value="flv" ${platform.format === 'flv' ? 'selected' : ''}>FLV</option>
+                    </select>
+                </div>
+              ` : ''}
+              ${name === 'twitch' ? `
+                <div style="margin-left: 15px; display: flex; align-items: center; font-size: 0.9em;">
+                  <input type="checkbox" id="twitchTestMode" 
+                    ${platform.test_mode ? 'checked' : ''} 
+                    onchange="toggleTestMode('${name}', this)" style="width: auto;">
+                  <label for="twitchTestMode" style="margin-left: 5px; cursor: pointer;" title="Appends ?bandwidthtest=true to stream key">Test Mode</label>
+                </div>
+              ` : ''}
             </div>
-          ` : ''}
-        </div>
-        <label class="toggle-switch ${canToggle ? '' : 'disabled'}">
-          <input type="checkbox" 
-                 ${platform.enabled ? 'checked' : ''} 
-                 ${canToggle ? '' : 'disabled'}
-                 onchange="togglePlatform('${name}', this)">
-          <span class="toggle-slider"></span>
-        </label>
-      `;
-            platformsDiv.appendChild(div);
-        });
+            <label class="toggle-switch ${canToggle ? '' : 'disabled'}">
+              <input type="checkbox" 
+                     ${platform.enabled ? 'checked' : ''} 
+                     ${canToggle ? '' : 'disabled'}
+                     onchange="togglePlatform('${name}', this)">
+              <span class="toggle-slider"></span>
+            </label>
+          `;
+                platformsDiv.appendChild(div);
+            });
+        }
 
         // Check if browser_debug is enabled AND player is locally enabled
-        if (config.platforms.browser_debug && config.platforms.browser_debug.enabled && playerEnabled) {
-            setupVideoPlayer();
-            startStreamCheck();
-        } else if (!playerEnabled && streamCheckInterval) {
+        // Only if playerEnabled var exists (global)
+        if (typeof playerEnabled !== 'undefined' && config.platforms.browser_debug && config.platforms.browser_debug.enabled && playerEnabled) {
+            // Only setup if we are on dashboard where player toggle exists
+            if (document.getElementById('playerToggle')) {
+                setupVideoPlayer();
+                startStreamCheck();
+            }
+        }
+        // Logic for stopping check if on dashboard
+        if (typeof playerEnabled !== 'undefined' && !playerEnabled && streamCheckInterval) {
             clearInterval(streamCheckInterval);
             streamCheckInterval = null;
         }
 
+        // Always try to update config display (for settings page)
         updateConfigDisplay(config);
     } catch (error) {
         console.error(error);
-        document.getElementById('platforms').innerHTML = 'Error loading status';
-        document.getElementById('configContainer').innerHTML = 'Error loading config';
+        if (document.getElementById('platforms')) document.getElementById('platforms').innerHTML = 'Error loading status';
+        if (document.getElementById('configContainer')) document.getElementById('configContainer').innerHTML = 'Error loading config';
     }
 }
 
 function updateConfigDisplay(config) {
     const container = document.getElementById('configContainer');
-    let html = '<table class="config-table">';
-    html += '<tr><th>Platform</th><th>RTMP URL</th><th>Stream Key</th><th>Settings</th></tr>';
+    if (!container) return;
+
+    let html = '';
+
+    // Platforms Config
+    html += '<h4 class="mb-4">Platforms</h4>';
+    html += '<div class="grid-auto">';
 
     Object.entries(config.platforms).forEach(([name, platform]) => {
         if (name === 'recording' || name === 'browser_debug') return;
@@ -161,45 +184,89 @@ function updateConfigDisplay(config) {
             word.charAt(0).toUpperCase() + word.slice(1)
         ).join(' ');
 
-        // Format settings
-        const settingsHtml = platform.settings && Object.keys(platform.settings).length > 0
-            ? `<pre class="settings-json">${JSON.stringify(platform.settings, null, 2)}</pre>`
-            : '<span class="text-muted">Default</span>';
-
         html += `
-            <tr>
-                <td><strong>${displayName}</strong></td>
-                <td><code class="url-code">${platform.rtmpUrl}</code></td>
-                <td>
-                    <div class="key-container">
-                        <input type="password" readonly value="${platform.streamKey || ''}" id="key-${name}" class="stream-key-input">
-                        <button class="icon-button" onclick="toggleKeyVisibility('key-${name}')" title="Show/Hide Key">👁️</button>
+            <div class="card p-4">
+                <div class="flex justify-between items-center mb-2">
+                    <h5 class="mb-0 font-bold">${displayName}</h5>
+                    ${platform.enabled ? '<span class="badge badge-success">Enabled</span>' : '<span class="badge badge-neutral">Disabled</span>'}
+                </div>
+                
+                <div class="flex flex-col gap-2 text-sm">
+                    <div>
+                        <span class="text-muted block mb-1">RTMP URL</span>
+                        <code class="text-primary block bg-surface-hover p-2 rounded" style="word-break: break-all;">${platform.rtmpUrl}</code>
                     </div>
-                </td>
-                <td>${settingsHtml}</td>
-            </tr>
+                    
+                    <div>
+                        <span class="text-muted block mb-1">Stream Key</span>
+                        <div class="flex gap-2">
+                             <input type="password" readonly value="${platform.streamKey || ''}" id="key-${name}" class="bg-surface-hover border border-color rounded p-2 text-sm flex-1">
+                             <button class="btn btn-secondary btn-sm" onclick="toggleKeyVisibility('key-${name}')" title="Show/Hide Key">👁️</button>
+                        </div>
+                    </div>
+
+                     ${platform.settings && Object.keys(platform.settings).length > 0 ? `
+                        <div class="mt-2">
+                            <span class="text-muted block mb-1">Advanced Settings</span>
+                            <div class="bg-surface-hover p-2 rounded text-xs text-secondary">
+                                ${Object.entries(platform.settings).map(([k, v]) => `<div><span class="text-primary">${k}:</span> ${v}</div>`).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
         `;
     });
-
-    html += '</table>';
+    html += '</div>';
 
     // Global Config Section
-    html += '<div class="global-config">';
-    html += '<h4>Global Configuration</h4>';
+    html += '<h4 class="mt-8 mb-4">Global Configuration</h4>';
+    html += '<div class="grid-2">';
 
     if (config.server) {
-        html += '<div class="config-block"><h5>Server</h5>';
-        html += `<pre class="settings-json">${JSON.stringify(config.server, null, 2)}</pre></div>`;
+        html += `
+            <div class="card p-4">
+                <h5 class="mb-2 font-bold">Server</h5>
+                <div class="flex flex-col gap-2 text-sm">
+                    ${Object.entries(config.server).map(([k, v]) => `
+                        <div class="flex justify-between border-b border-color pb-1 last:border-0">
+                            <span class="text-muted">${k}</span>
+                            <span class="text-primary font-mono">${v}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
     }
 
     if (config.transcription) {
-        html += '<div class="config-block"><h5>Transcription</h5>';
-        html += `<pre class="settings-json">${JSON.stringify(config.transcription, null, 2)}</pre></div>`;
+        html += `
+            <div class="card p-4">
+                <h5 class="mb-2 font-bold">Transcription</h5>
+                 <div class="flex flex-col gap-2 text-sm">
+                    ${Object.entries(config.transcription).map(([k, v]) => `
+                        <div class="flex justify-between border-b border-color pb-1 last:border-0">
+                            <span class="text-muted">${k}</span>
+                            <span class="text-primary font-mono">${v}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
     }
 
     html += '</div>';
 
+    // Add raw view toggle or logic if really needed, but structured is better.
+
     container.innerHTML = html;
+}
+
+// Helper for key visibility
+function toggleKeyVisibility(id) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
 }
 
 function toggleKeyVisibility(elementId) {

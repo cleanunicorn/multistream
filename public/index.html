@@ -1,71 +1,76 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Multistream Dashboard</title>
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/dashboard.css">
+  <link rel="stylesheet" href="css/main.css">
   <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+  <script src="js/ui.js"></script>
   <script src="js/dashboard.js"></script>
 </head>
 
 <body>
-  <div class="container">
-    <div style="display: flex; align-items: center; justify-content: space-between;">
-      <h1>Multistream Server</h1>
-      <a href="recordings.html"
-        style="text-decoration: none; background-color: #0099cc; color: white; padding: 8px 15px; border-radius: 4px; font-weight: bold; margin-left: 10px;">View
-        Recordings</a>
-      <a href="resources.html"
-        style="text-decoration: none; background-color: #6c757d; color: white; padding: 8px 15px; border-radius: 4px; font-weight: bold; margin-left: 10px;">View
-        Resources</a>
+  <!-- The layout is handled by js/ui.js wrapper usually, but because logic might run before load, we can structure it correct immediately or let ui.js handle it. 
+         Ideally, we write the structure directly here for better perceived performance and SEO (though it's an app).
+         However, UI.js injects it. Let's stick to the current plan where UI.js wraps the body content. 
+         But to be safe and clean, I will write the FULL structure here so we don't rely on JS injection for the layout if possible, 
+         OR I will stick to the plan. 
+         
+         My UI.js replaces body content. Let's make index.html contain the "Main Content" part only, as per my UI.js logic.
+    -->
+
+  <div class="flex justify-between items-center mb-4">
+    <div>
+      <h1>Dashboard</h1>
+      <p class="text-secondary text-sm">Monitor and control your streams</p>
     </div>
+    <div class="flex gap-2">
+      <button id="reloadButton" class="btn btn-secondary" onclick="reloadConfig()">
+        <span>🔄</span> Reload Config
+      </button>
+      <span id="reloadStatus" class="reload-status"></span>
+    </div>
+  </div>
 
-
-
+  <!-- Platform Status -->
+  <div class="card mb-4">
     <h2>Platform Status</h2>
-    <div id="platforms">Loading...</div>
+    <div id="platforms">Loading platform status...</div>
+  </div>
 
-    <div class="debug-section">
-      <div class="player-controls">
-        <h2>Debug Stream Player</h2>
-        <label class="toggle-switch">
-          <input type="checkbox" id="playerToggle" onchange="togglePlayer(this.checked)">
-          <span class="toggle-slider"></span>
-        </label>
+  <!-- Layout Grid for Player and Info -->
+  <div class="flex flex-col gap-4">
+
+    <!-- Debug Player -->
+    <div class="card">
+      <div class="flex justify-between items-center mb-4">
+        <h2>Debug Player</h2>
+        <div class="player-controls">
+          <label class="toggle-switch">
+            <input type="checkbox" id="playerToggle" onchange="togglePlayer(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
-      <div id="playerStatusText" style="margin-bottom: 10px; font-style: italic;">Player is disabled to save resources
+
+      <div id="playerStatusText" class="text-secondary text-center p-4 bg-surface-hover rounded">
+        Player is disabled to save resources
       </div>
 
       <div id="playerContainer" style="display: none;">
-        <div id="streamStatus" class="stream-status stream-inactive">Stream Not Active</div>
+        <div id="streamStatus" class="stream-status stream-inactive mb-4">Stream Not Active</div>
         <div class="video-container" id="videoWrapper">
           <video id="videoPlayer" controls></video>
         </div>
-        <p><small>The debug stream will appear here when browser_debug platform is enabled and a stream is
-            active.</small></p>
-      </div>
-    </div>
-    <div class="reload-section">
-      <h3>Configuration</h3>
-      <p>Configuration file is watched automatically, or you can reload manually:</p>
-      <button id="reloadButton" class="reload-button" onclick="reloadConfig()">Reload Config</button>
-      <span id="reloadStatus" class="reload-status"></span>
-    </div>
-    <div class="info-box">
-      <h3 class="collapsible collapsed" onclick="toggleCollapse('obsConfig')">OBS Configuration</h3>
-      <div id="obsConfig" class="collapsible-content collapsed">
-        <p><strong>Server:</strong> <code>rtmp://localhost:1935/live</code></p>
-        <p><strong>Stream Key:</strong> <code>stream</code></p>
+        <p class="text-sm text-secondary mt-2">
+          The debug stream will appear here when browser_debug platform is enabled and a stream is active.
+        </p>
       </div>
     </div>
 
-    <div class="info-box">
-      <h3 class="collapsible collapsed" onclick="toggleCollapse('streamConfig')">Stream Configuration</h3>
-      <div id="streamConfig" class="collapsible-content collapsed">
-        <div id="configContainer">Loading...</div>
-      </div>
-    </div>
+
   </div>
 </body>
 
