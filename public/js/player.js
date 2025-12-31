@@ -214,7 +214,7 @@ function clipCurrentTime() {
     const ss = String(date.getUTCSeconds()).padStart(2, '0');
     const timestamp = `${hh}:${mm}:${ss}`;
 
-    previewClip(currentFilename, timestamp, null);
+    downloadClip(currentFilename, timestamp, null);
 }
 
 async function previewClip(filename, timestamp, btn) {
@@ -269,9 +269,27 @@ async function previewClip(filename, timestamp, btn) {
 }
 
 async function downloadClip(filename, timestamp, btn) {
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Generating...';
+    let originalText = '';
+    if (btn) {
+        originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Generating...';
+    } else {
+        // Fallback to finding the main clip button
+        const clipCurrentBtn = document.querySelector('button[onclick="clipCurrentTime()"]');
+        if (clipCurrentBtn) {
+            originalText = clipCurrentBtn.innerText; // Use innerText to capture icon if present
+            // But simpler to just save what it was
+            originalText = clipCurrentBtn.innerHTML;
+
+            clipCurrentBtn.disabled = true;
+            clipCurrentBtn.textContent = 'Generating...';
+            btn = clipCurrentBtn;
+        }
+    }
+
+    // If we still don't have text, use default
+    if (!originalText) originalText = 'Download';
 
     try {
         const response = await fetch(`/api/recordings/${filename}/clip`, {
@@ -289,20 +307,27 @@ async function downloadClip(filename, timestamp, btn) {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            btn.textContent = 'Done!';
-            setTimeout(() => {
-                btn.textContent = originalText;
-                btn.disabled = false;
-            }, 3000);
+
+            if (btn) {
+                btn.textContent = 'Done!';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 3000);
+            }
         } else {
             alert('Failed: ' + (result.error || 'Unknown error'));
-            btn.textContent = originalText;
-            btn.disabled = false;
+            if (btn) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         }
     } catch (error) {
         console.error('Error:', error);
         alert('Error generating clip');
-        btn.textContent = originalText;
-        btn.disabled = false;
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
     }
 }
