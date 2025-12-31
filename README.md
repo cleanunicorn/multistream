@@ -12,6 +12,20 @@ A Node.js RTMP server that receives streams from OBS and restreams them to multi
 - 🔧 Configuration via YAML file
 - 🔍 Browser debug mode to preview streams in the dashboard
 
+## Screenshots
+
+### Dashboard
+![Dashboard](docs/images/dashboard.png)
+
+### Recordings
+![Recordings](docs/images/recordings.png)
+
+### Settings
+![Settings](docs/images/settings.png)
+
+### Resources
+![Resources](docs/images/resources.png)
+
 ## Quick Start
 
 ### Using Node.js
