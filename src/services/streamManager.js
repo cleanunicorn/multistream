@@ -32,7 +32,7 @@ export class StreamManager {
       return;
     }
 
-    const inputUrl = `rtmp://localhost:1935${streamPath}`;
+    const inputUrl = `rtmp://localhost:${this.config.server.rtmpPort}${streamPath}`;
     const ffmpegCommands = [];
 
     // Create ffmpeg commands for each platform
@@ -373,7 +373,7 @@ export class StreamManager {
       });
 
       // Start new platforms
-      const inputUrl = `rtmp://localhost:1935${streamPath}`;
+      const inputUrl = `rtmp://localhost:${this.config.server.rtmpPort}${streamPath}`;
       platformsToStart.forEach(platform => {
         let command;
         if (platform === 'recording') {

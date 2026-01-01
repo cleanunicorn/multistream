@@ -6,7 +6,7 @@ import { loadConfig } from '../config/config.js';
 export function createRTMPServer() {
   const appConfig = loadConfig();
   const streamManager = new StreamManager();
-  
+
   const config = {
     rtmp: {
       port: appConfig.server.rtmpPort,
@@ -23,8 +23,8 @@ export function createRTMPServer() {
 
   const nms = new NodeMediaServer(config);
 
-  nms.on('prePublish', (id, StreamPath, args) => {
-    logger.info(`Stream started: ${StreamPath}`);
+  nms.on('postPublish', (id, StreamPath, args) => {
+    logger.info(`Stream started (postPublish): ${StreamPath}`);
     streamManager.startStream(StreamPath, args);
   });
 
