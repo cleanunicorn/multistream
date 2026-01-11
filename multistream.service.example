@@ -1,0 +1,14 @@
+[Unit]
+Description=CleanUnicorn Multi-Stream Service
+After=network.target
+
+[Service]
+Type=simple
+User=daniel
+WorkingDirectory=/home/daniel/Documents/Development/cleanunicorn/multistream
+# We use a wrapper script to load NVM environment dynamically
+ExecStart=/home/daniel/Documents/Development/cleanunicorn/multistream/start_service.sh
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
