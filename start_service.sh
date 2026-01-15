@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Resolving the execution path
+cd "$(dirname "$0")"
+
+# Load local quill environment into path
+export PATH="$(pwd)/../quill/.venv/bin:$PATH"
+
 # Load NVM
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
