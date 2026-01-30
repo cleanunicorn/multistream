@@ -2,6 +2,9 @@
 
 A Node.js RTMP server that receives streams from OBS and restreams them to multiple platforms simultaneously including Twitch, YouTube, Kick, and more.
 
+<img width="918" height="784" alt="image" src="https://github.com/user-attachments/assets/9a16f860-2b90-4c9e-946c-2e913addee3e" />
+
+
 ## Features
 
 - 📡 RTMP server to receive OBS streams
