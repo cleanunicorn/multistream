@@ -332,6 +332,22 @@ async function downloadClip(filename, timestamp, btn) {
     }
 }
 
+
+// OSD Logic
+let osdTimeout;
+function showOSD(text) {
+    const osd = document.getElementById('osd');
+    if (!osd) return;
+
+    osd.textContent = text;
+    osd.style.opacity = '1';
+
+    if (osdTimeout) clearTimeout(osdTimeout);
+    osdTimeout = setTimeout(() => {
+        osd.style.opacity = '0';
+    }, 2000);
+}
+
 // Keyboard Shortcuts
 document.addEventListener('keydown', (e) => {
     // Ignore if typing in an input text area
@@ -342,36 +358,96 @@ document.addEventListener('keydown', (e) => {
     const video = document.getElementById('player');
     if (!video) return;
 
+    // Handle 0-9 for percentage seek
+    if (e.key >= '0' && e.key <= '9') {
+        const percent = parseInt(e.key) * 10;
+        const time = video.duration * (percent / 100);
+        if (isFinite(time)) {
+            video.currentTime = time;
+            showOSD(`Seek: ${percent}%`);
+        }
+        return;
+    }
+
     switch (e.key) {
         case ' ':
         case 'k':
             e.preventDefault(); // Prevent scrolling
-            if (video.paused) video.play();
-            else video.pause();
+            if (video.paused) {
+                video.play();
+                showOSD('Play');
+            } else {
+                video.pause();
+                showOSD('Pause');
+            }
             break;
         case 'ArrowLeft':
             e.preventDefault();
             if (e.shiftKey) {
                 adjustTime(-30);
+                showOSD('Seek: -30s');
             } else {
                 adjustTime(-10);
+                showOSD('Seek: -10s');
             }
             break;
         case 'ArrowRight':
             e.preventDefault();
             if (e.shiftKey) {
                 adjustTime(30);
+                showOSD('Seek: +30s');
             } else {
                 adjustTime(10);
+                showOSD('Seek: +10s');
             }
             break;
         case 'ArrowUp':
             e.preventDefault();
-            changeSpeed(1); // Increase speed index
+            changeVolume(0.1);
             break;
         case 'ArrowDown':
             e.preventDefault();
-            changeSpeed(-1); // Decrease speed index
+            changeVolume(-0.1);
+            break;
+        case '>':
+        case '.':
+            if (e.shiftKey) {
+                // Speed up
+                changeSpeed(1);
+            } else {
+                // Frame step forward (approx 30fps)
+                video.currentTime += 0.033;
+                video.pause(); // Usually standard to pause when stepping
+            }
+            break;
+        case '<':
+        case ',':
+            if (e.shiftKey) {
+                // Speed down
+                changeSpeed(-1);
+            } else {
+                // Frame step backward
+                video.currentTime -= 0.033;
+                video.pause();
+            }
+            break;
+        case 'Home':
+            e.preventDefault();
+            video.currentTime = 0;
+            showOSD('Start');
+            break;
+        case 'End':
+            e.preventDefault();
+            video.currentTime = video.duration;
+            showOSD('End');
+            break;
+        case 'f':
+        case 'F':
+            toggleFullscreen();
+            break;
+        case 'p':
+        case 'P':
+            togglePiP();
             break;
         case 'c':
         case 'C':
@@ -391,9 +467,22 @@ document.addEventListener('keydown', (e) => {
             if (modal && modal.style.display !== 'none') {
                 toggleHelpModal();
             }
+            // Also exit fullscreen if ESC is pressed (handled by browser usually, but good to ensure OSD doesn't stick)
             break;
     }
 });
+
+function changeVolume(delta) {
+    const video = document.getElementById('player');
+    if (!video) return;
+
+    let newVol = video.volume + delta;
+    if (newVol < 0) newVol = 0;
+    if (newVol > 1) newVol = 1;
+
+    video.volume = newVol;
+    showOSD(`Volume: ${Math.round(newVol * 100)}%`);
+}
 
 function changeSpeed(direction) {
     const speedSelect = document.getElementById('speedSelect');
@@ -421,6 +510,41 @@ function changeSpeed(direction) {
         const newSpeed = options[newIndex];
         speedSelect.value = newSpeed;
         setPlaybackSpeed(newSpeed);
+        showOSD(`Speed: ${newSpeed}x`);
+    }
+}
+
+function toggleFullscreen() {
+    const container = document.getElementById('videoContainer'); // Use container to keep OSD
+    if (!document.fullscreenElement) {
+        if (container.requestFullscreen) {
+            container.requestFullscreen();
+        } else if (container.webkitRequestFullscreen) { /* Safari */
+            container.webkitRequestFullscreen();
+        } else if (container.msRequestFullscreen) { /* IE11 */
+            container.msRequestFullscreen();
+        }
+        showOSD('Fullscreen');
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) { /* Safari */
+            document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) { /* IE11 */
+            document.msExitFullscreen();
+        }
+        showOSD('Exit Fullscreen');
+    }
+}
+
+function togglePiP() {
+    const video = document.getElementById('player');
+    if (document.pictureInPictureElement) {
+        document.exitPictureInPicture();
+    } else {
+        if (video.requestPictureInPicture) {
+            video.requestPictureInPicture();
+        }
     }
 }
 
@@ -442,4 +566,3 @@ window.onclick = function (event) {
         modal.style.display = "none";
     }
 }
-

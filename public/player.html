@@ -47,9 +47,14 @@
 
             <!-- Left Pane: Video -->
             <div class="flex flex-col gap-4" style="flex: 2; min-width: 0;">
-                <div class="video-container visible"
-                    style="flex: 1; background: black; display: flex; align-items: center; justify-content: center;">
+                <div id="videoContainer" class="video-container visible"
+                    style="flex: 1; background: black; display: flex; align-items: center; justify-content: center; position: relative;">
                     <video id="player" controls style="max-height: 100%; width: 100%;"></video>
+                    <!-- OSD Overlay -->
+                    <div id="osd"
+                        style="position: absolute; top: 20px; right: 20px; background: rgba(0, 0, 0, 0.7); color: white; padding: 10px 20px; border-radius: 5px; pointer-events: none; opacity: 0; transition: opacity 0.3s; font-size: 1.2rem; font-weight: bold; z-index: 10;">
+                        Speed: 1x
+                    </div>
                 </div>
 
                 <!-- Controls Bar -->
@@ -115,28 +120,48 @@
                 <span onclick="toggleHelpModal()"
                     class="close text-2xl cursor-pointer hover:text-primary">&times;</span>
             </div>
-            <div class="space-y-2">
-                <div class="flex justify-between border-bottom border-color py-2">
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between border-bottom border-color py-1">
                     <span>Play/Pause</span>
-                    <span class="font-mono bg-surface-hover px-2 rounded">Space</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">Space / k</span>
                 </div>
-                <div class="flex justify-between border-bottom border-color py-2">
+                <div class="flex justify-between border-bottom border-color py-1">
                     <span>Seek -10s / +10s</span>
                     <span class="font-mono bg-surface-hover px-2 rounded">← / →</span>
                 </div>
-                <div class="flex justify-between border-bottom border-color py-2">
+                <div class="flex justify-between border-bottom border-color py-1">
                     <span>Seek -30s / +30s</span>
                     <span class="font-mono bg-surface-hover px-2 rounded">Shift + ← / →</span>
                 </div>
-                <div class="flex justify-between border-bottom border-color py-2">
-                    <span>Speed Up / Down</span>
+                <div class="flex justify-between border-bottom border-color py-1">
+                    <span>Volume Up / Down</span>
                     <span class="font-mono bg-surface-hover px-2 rounded">↑ / ↓</span>
                 </div>
-                <div class="flex justify-between border-bottom border-color py-2">
+                <div class="flex justify-between border-bottom border-color py-1">
+                    <span>Speed Slower / Faster</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">&lt; / &gt;</span>
+                </div>
+                <div class="flex justify-between border-bottom border-color py-1">
+                    <span>Frame Step Back / Fwd</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">, / .</span>
+                </div>
+                <div class="flex justify-between border-bottom border-color py-1">
+                    <span>Seek % (0% - 90%)</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">0 - 9</span>
+                </div>
+                <div class="flex justify-between border-bottom border-color py-1">
+                    <span>Start / End</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">Home / End</span>
+                </div>
+                <div class="flex justify-between border-bottom border-color py-1">
+                    <span>Fullscreen / PiP</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">f / p</span>
+                </div>
+                <div class="flex justify-between border-bottom border-color py-1">
                     <span>Create Clip</span>
                     <span class="font-mono bg-surface-hover px-2 rounded">c</span>
                 </div>
-                <div class="flex justify-between py-2">
+                <div class="flex justify-between py-1">
                     <span>Show/Hide Help</span>
                     <span class="font-mono bg-surface-hover px-2 rounded">?</span>
                 </div>
