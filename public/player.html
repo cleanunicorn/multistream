@@ -36,6 +36,9 @@
             <h4 id="videoTitle" class="m-0 text-primary font-bold ml-2">Loading...</h4>
             <div>
                 <!-- Optional controls could go here -->
+                <button onclick="toggleHelpModal()" class="btn btn-secondary btn-sm" title="Keyboard Shortcuts (?)">
+                    ⌨️
+                </button>
             </div>
         </div>
 
@@ -60,7 +63,8 @@
 
                     <div class="flex gap-2 items-center">
                         <span class="text-sm text-secondary">Speed:</span>
-                        <select onchange="setPlaybackSpeed(this.value)" class="p-1 text-sm" style="width: auto;">
+                        <select id="speedSelect" onchange="setPlaybackSpeed(this.value)" class="p-1 text-sm"
+                            style="width: auto;">
                             <option value="0.5">0.5x</option>
                             <option value="1" selected>1x</option>
                             <option value="1.5">1.5x</option>
@@ -97,6 +101,48 @@
                     </div>
                 </div>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Modal -->
+    <div id="helpModal" class="modal"
+        style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);">
+        <div class="modal-content bg-surface border border-color p-4 rounded shadow-lg"
+            style="margin: 15% auto; width: 400px; max-width: 90%;">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold">Keyboard Shortcuts</h3>
+                <span onclick="toggleHelpModal()"
+                    class="close text-2xl cursor-pointer hover:text-primary">&times;</span>
+            </div>
+            <div class="space-y-2">
+                <div class="flex justify-between border-bottom border-color py-2">
+                    <span>Play/Pause</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">Space</span>
+                </div>
+                <div class="flex justify-between border-bottom border-color py-2">
+                    <span>Seek -10s / +10s</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">← / →</span>
+                </div>
+                <div class="flex justify-between border-bottom border-color py-2">
+                    <span>Seek -30s / +30s</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">Shift + ← / →</span>
+                </div>
+                <div class="flex justify-between border-bottom border-color py-2">
+                    <span>Speed Up / Down</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">↑ / ↓</span>
+                </div>
+                <div class="flex justify-between border-bottom border-color py-2">
+                    <span>Create Clip</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">c</span>
+                </div>
+                <div class="flex justify-between py-2">
+                    <span>Show/Hide Help</span>
+                    <span class="font-mono bg-surface-hover px-2 rounded">?</span>
+                </div>
+            </div>
+            <div class="mt-4 text-right">
+                <button onclick="toggleHelpModal()" class="btn btn-primary btn-sm">Close</button>
             </div>
         </div>
     </div>

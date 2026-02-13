@@ -331,3 +331,115 @@ async function downloadClip(filename, timestamp, btn) {
         }
     }
 }
+
+// Keyboard Shortcuts
+document.addEventListener('keydown', (e) => {
+    // Ignore if typing in an input text area
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+        return;
+    }
+
+    const video = document.getElementById('player');
+    if (!video) return;
+
+    switch (e.key) {
+        case ' ':
+        case 'k':
+            e.preventDefault(); // Prevent scrolling
+            if (video.paused) video.play();
+            else video.pause();
+            break;
+        case 'ArrowLeft':
+            e.preventDefault();
+            if (e.shiftKey) {
+                adjustTime(-30);
+            } else {
+                adjustTime(-10);
+            }
+            break;
+        case 'ArrowRight':
+            e.preventDefault();
+            if (e.shiftKey) {
+                adjustTime(30);
+            } else {
+                adjustTime(10);
+            }
+            break;
+        case 'ArrowUp':
+            e.preventDefault();
+            changeSpeed(1); // Increase speed index
+            break;
+        case 'ArrowDown':
+            e.preventDefault();
+            changeSpeed(-1); // Decrease speed index
+            break;
+        case 'c':
+        case 'C':
+            // Only trigger if not holding other modifiers (except shift/caps)
+            if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+                e.preventDefault();
+                clipCurrentTime();
+            }
+            break;
+        case '?':
+        case '/':
+            e.preventDefault();
+            toggleHelpModal();
+            break;
+        case 'Escape':
+            const modal = document.getElementById('helpModal');
+            if (modal && modal.style.display !== 'none') {
+                toggleHelpModal();
+            }
+            break;
+    }
+});
+
+function changeSpeed(direction) {
+    const speedSelect = document.getElementById('speedSelect');
+    if (!speedSelect) return;
+
+    const options = Array.from(speedSelect.options).map(opt => parseFloat(opt.value));
+    const currentSpeed = parseFloat(speedSelect.value);
+
+    let currentIndex = options.indexOf(currentSpeed);
+
+    // If exact match not found (unlikely), find closest
+    if (currentIndex === -1) {
+        currentIndex = options.findIndex(opt => opt >= currentSpeed);
+        if (currentIndex === -1) currentIndex = options.length - 1;
+    }
+
+    let newIndex = currentIndex + direction;
+
+    // Clamp index
+    if (newIndex < 0) newIndex = 0;
+    if (newIndex >= options.length) newIndex = options.length - 1;
+
+    // Apply
+    if (newIndex !== currentIndex) {
+        const newSpeed = options[newIndex];
+        speedSelect.value = newSpeed;
+        setPlaybackSpeed(newSpeed);
+    }
+}
+
+function toggleHelpModal() {
+    const modal = document.getElementById('helpModal');
+    if (!modal) return;
+
+    if (modal.style.display === 'none' || modal.style.display === '') {
+        modal.style.display = 'block';
+    } else {
+        modal.style.display = 'none';
+    }
+}
+
+// Close modal when clicking outside
+window.onclick = function (event) {
+    const modal = document.getElementById('helpModal');
+    if (event.target == modal) {
+        modal.style.display = "none";
+    }
+}
+
