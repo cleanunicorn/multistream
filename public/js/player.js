@@ -443,7 +443,9 @@ document.addEventListener('keydown', (e) => {
             break;
         case 'f':
         case 'F':
-            toggleFullscreen();
+            if (!e.ctrlKey && !e.metaKey) {
+                toggleFullscreen();
+            }
             break;
         case 'p':
         case 'P':
