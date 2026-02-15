@@ -43,12 +43,6 @@ A Node.js RTMP server that receives streams from OBS and restreams them to multi
    sudo apt install ffmpeg
    ```
 
-   Install quill (for transcriptions).
-   Check out [quill](https://github.com/cleanunicorn/quill) for more details.
-   ```
-   uv tool install . --python 3.12
-   ```
-
 2. **Configure your stream keys:**
    ```bash
    cp config.example.yaml config.yaml
@@ -67,17 +61,33 @@ A Node.js RTMP server that receives streams from OBS and restreams them to multi
 5. **View dashboard:**
    Open `http://localhost:8000` in your browser
 
-### Using Docker
+### Using Docker (with NVIDIA GPU)
 
-1. **Create configuration:**
+1. **Prerequisites:**
+   - Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) on your host machine.
+     ```bash
+     sudo apt-get install -y nvidia-container-toolkit
+     sudo nvidia-ctk runtime configure --runtime=docker
+     sudo systemctl restart docker
+     ```
+
+2. **Create configuration:**
    ```bash
    cp config.example.yaml config.yaml
    # Edit config.yaml with your stream keys
    ```
 
-2. **Run with Docker Compose:**
+3. **Run with Docker Compose:**
    ```bash
-   docker-compose up -d
+   docker compose up --build -d
+   ```
+   *Note: The first build will take a significant amount of time (10-15 mins) to download the NVIDIA CUDA image and large Python dependencies (PyTorch, NeMo).*
+
+4. **Verify GPU Access:**
+   ```bash
+   docker compose logs -f
+   # or
+   docker compose exec multistream nvidia-smi
    ```
 
 ## Configuration

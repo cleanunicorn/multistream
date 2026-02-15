@@ -3,8 +3,8 @@
 # Resolving the execution path
 cd "$(dirname "$0")"
 
-# Load local quill environment into path
-export PATH="$(pwd)/../quill/.venv/bin:$PATH"
+# Load local environment into path
+export PATH="$HOME/.local/bin:$PATH"
 
 # Load NVM
 export NVM_DIR="$HOME/.nvm"

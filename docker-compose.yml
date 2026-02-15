@@ -12,4 +12,13 @@ services:
       - ./config.yaml:/app/config.yaml:ro
       - ./logs:/app/logs
       - ./recordings:/app/recordings
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # Increase shared memory size for PyTorch/NeMo
+    shm_size: '8gb'
     restart: unless-stopped
