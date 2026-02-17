@@ -405,10 +405,15 @@ export function createAPIServer(streamManagerInstance) {
       const files = fs.readdirSync(recPath)
         .filter(file => {
           if (file.startsWith('.')) return false;
-          if (file.endsWith('.txt')) return false;
-          if (file.endsWith('.tmp')) return false;
+
+          // Filter for video extensions only
+          const videoExtensions = ['.mp4', '.mkv', '.flv', '.mov', '.webm', '.ts', '.avi'];
+          const ext = path.extname(file).toLowerCase();
+
+          if (!videoExtensions.includes(ext)) return false;
+
           const stats = fs.statSync(path.join(recPath, file));
-          return stats.isFile(); // Only list files, not directories like 'clips'
+          return stats.isFile();
         })
         .map(file => {
           const stats = fs.statSync(path.join(recPath, file));

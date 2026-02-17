@@ -30,3 +30,7 @@ clean:
 	rm -rf node_modules
 	rm -rf recordings/*
 	find . -name "*.log" -delete 
+
+# Docker build and run
+docker: 
+	docker compose up --build -d
