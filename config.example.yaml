@@ -47,7 +47,8 @@ platforms:
   #   format: mp4
 server:
   rtmpPort: 1935
-  httpPort: 8000
+  apiPort: 8000
+  httpStreamingPort: 9000
 
 transcription:
   model: large # Options: tiny, base, small, medium, large

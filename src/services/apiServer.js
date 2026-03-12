@@ -5,7 +5,10 @@ import { loadConfig, configEvents } from '../config/config.js';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import yaml from 'yaml';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { transcribeFile } from '../utils/transcription.js';
 import { getSystemStats, getProcessStats } from '../utils/systemStats.js';
 import fileUpload from 'express-fileupload';
@@ -625,7 +628,7 @@ export function createAPIServer(streamManagerInstance) {
 
 
   // Serve static files from 'public' directory
-  app.use(express.static('public', { extensions: ['html'] }));
+  app.use(express.static(path.join(__dirname, '../../public'), { extensions: ['html'] }));
 
   return app;
 }
