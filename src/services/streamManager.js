@@ -190,9 +190,11 @@ export class StreamManager {
       logger.info(`Created recording directory: ${recordingPath}`);
     }
 
-    // Generate filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `${streamKey}_${timestamp}.${this.config.recording.format}`;
+    // Generate filename with timestamp (no stream key to avoid leaking API keys)
+    const now = new Date();
+    const datePart = now.toISOString().slice(0, 10); // YYYY-MM-DD
+    const timePart = now.toTimeString().slice(0, 8).replace(/:/g, '-'); // HH-MM-SS
+    const filename = `recording_${datePart}_${timePart}.${this.config.recording.format}`;
     const outputPath = path.join(recordingPath, filename);
 
     const command = ffmpeg(inputUrl)

@@ -289,33 +289,42 @@ function openPlayer(filename) {
 }
 
 function formatDisplayName(filename) {
-    const regex = /stream_(\d{4}-\d{2}-\d{2})T(\d{2})[-:](\d{2})[-:](\d{2})[-:](\d{3})Z/;
-    const match = filename.match(regex);
+    // New format: recording_YYYY-MM-DD_HH-MM-SS.ext
+    const newRegex = /recording_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})/;
+    // Legacy format: stream_YYYY-MM-DDTHH-MM-SS-mmmZ
+    const legacyRegex = /stream_(\d{4}-\d{2}-\d{2})T(\d{2})[-:](\d{2})[-:](\d{2})[-:](\d{3})Z/;
 
-    if (match) {
-        const datePart = match[1];
-        const hours = match[2];
-        const minutes = match[3];
-        const seconds = match[4];
+    let dateObj = null;
 
+    const newMatch = filename.match(newRegex);
+    if (newMatch) {
+        const [, date, hh, mm, ss] = newMatch;
+        dateObj = new Date(`${date}T${hh}:${mm}:${ss}`);
+    }
+
+    if (!dateObj) {
+        const legacyMatch = filename.match(legacyRegex);
+        if (legacyMatch) {
+            const [, date, hh, mm, ss] = legacyMatch;
+            dateObj = new Date(`${date}T${hh}:${mm}:${ss}Z`);
+        }
+    }
+
+    if (dateObj && !isNaN(dateObj.getTime())) {
         try {
-            const dateStr = `${datePart}T${hours}:${minutes}:${seconds}Z`;
-            const dateObj = new Date(dateStr);
-
-            if (!isNaN(dateObj.getTime())) {
-                return dateObj.toLocaleDateString(undefined, {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                }) + ' - ' + dateObj.toLocaleTimeString(undefined, {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-            }
+            return 'Recording — ' + dateObj.toLocaleDateString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            }) + ' ' + dateObj.toLocaleTimeString(undefined, {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
         } catch (e) {
             console.error('Date parsing error:', e);
         }
     }
+
     return filename;
 }
 
