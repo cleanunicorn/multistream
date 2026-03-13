@@ -242,6 +242,82 @@ export function createAPIServer(streamManagerInstance) {
     });
   });
 
+  // Update platform configuration
+  app.put('/api/platforms/:platform', async (req, res) => {
+    try {
+      const { platform } = req.params;
+      const { rtmpUrl, streamKey, settings } = req.body;
+
+      const configPath = path.join(process.cwd(), 'config.yaml');
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const yamlConfig = yaml.parse(configContent);
+
+      if (platform === 'recording') {
+        if (!yamlConfig.recording) yamlConfig.recording = {};
+        if (settings?.path !== undefined) yamlConfig.recording.path = settings.path;
+        if (settings?.format !== undefined) yamlConfig.recording.format = settings.format;
+      } else {
+        const config = loadConfig();
+        if (!config.platforms[platform]) {
+          return res.status(404).json({ error: `Platform ${platform} not found` });
+        }
+        if (!yamlConfig.platforms) yamlConfig.platforms = {};
+        if (!yamlConfig.platforms[platform]) yamlConfig.platforms[platform] = {};
+        if (rtmpUrl !== undefined) yamlConfig.platforms[platform].rtmpUrl = rtmpUrl;
+        if (streamKey !== undefined) yamlConfig.platforms[platform].streamKey = streamKey;
+        if (settings !== undefined) {
+          if (!yamlConfig.platforms[platform].settings) yamlConfig.platforms[platform].settings = {};
+          const coerced = {};
+          for (const [k, v] of Object.entries(settings)) {
+            if (v === 'true') coerced[k] = true;
+            else if (v === 'false') coerced[k] = false;
+            else if (v !== '' && !isNaN(Number(v)) && !isNaN(parseFloat(v))) coerced[k] = Number(v);
+            else coerced[k] = v;
+          }
+          Object.assign(yamlConfig.platforms[platform].settings, coerced);
+        }
+      }
+
+      const updatedYaml = yaml.stringify(yamlConfig, { indent: 2, lineWidth: 0 });
+      fs.writeFileSync(configPath, updatedYaml);
+
+      logger.info(`Platform ${platform} configuration updated`);
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('Failed to update platform config:', error);
+      res.status(500).json({ error: 'Failed to update configuration' });
+    }
+  });
+
+  // Update global configuration (server, transcription)
+  app.put('/api/config/global', async (req, res) => {
+    try {
+      const { server, transcription } = req.body;
+
+      const configPath = path.join(process.cwd(), 'config.yaml');
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const yamlConfig = yaml.parse(configContent);
+
+      if (server) {
+        if (!yamlConfig.server) yamlConfig.server = {};
+        Object.assign(yamlConfig.server, server);
+      }
+      if (transcription) {
+        if (!yamlConfig.transcription) yamlConfig.transcription = {};
+        Object.assign(yamlConfig.transcription, transcription);
+      }
+
+      const updatedYaml = yaml.stringify(yamlConfig, { indent: 2, lineWidth: 0 });
+      fs.writeFileSync(configPath, updatedYaml);
+
+      logger.info('Global configuration updated');
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('Failed to update global config:', error);
+      res.status(500).json({ error: 'Failed to update configuration' });
+    }
+  });
+
   // Toggle platform enabled/disabled status
   app.post('/api/platforms/:platform/toggle', async (req, res) => {
     try {

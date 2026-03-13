@@ -167,10 +167,13 @@ async function loadStatus() {
     }
 }
 
+let _configCache = null;
+
 function updateConfigDisplay(config) {
     const container = document.getElementById('configContainer');
     if (!container) return;
 
+    _configCache = config;
     let html = '';
 
     // Platforms Config
@@ -190,29 +193,41 @@ function updateConfigDisplay(config) {
                     <h5 class="mb-0 font-bold">${displayName}</h5>
                     ${platform.enabled ? '<span class="badge badge-success">Enabled</span>' : '<span class="badge badge-neutral">Disabled</span>'}
                 </div>
-                
+
                 <div class="flex flex-col gap-2 text-sm">
                     <div>
                         <span class="text-muted block mb-1">RTMP URL</span>
-                        <code class="text-primary block bg-surface-hover p-2 rounded" style="word-break: break-all;">${platform.rtmpUrl}</code>
+                        <input type="text" value="${platform.rtmpUrl || ''}" id="rtmp-${name}"
+                               class="bg-surface-hover border border-color rounded p-2 text-sm w-full font-mono">
                     </div>
-                    
+
                     <div>
                         <span class="text-muted block mb-1">Stream Key</span>
                         <div class="flex gap-2">
-                             <input type="password" readonly value="${platform.streamKey || ''}" id="key-${name}" class="bg-surface-hover border border-color rounded p-2 text-sm flex-1">
-                             <button class="btn btn-secondary btn-sm" onclick="toggleKeyVisibility('key-${name}')" title="Show/Hide Key">👁️</button>
+                            <input type="password" value="${platform.streamKey || ''}" id="key-${name}"
+                                   class="bg-surface-hover border border-color rounded p-2 text-sm flex-1">
+                            <button class="btn btn-secondary btn-sm" onclick="toggleKeyVisibility('key-${name}')" title="Show/Hide Key">👁️</button>
                         </div>
                     </div>
 
-                     ${platform.settings && Object.keys(platform.settings).length > 0 ? `
+                    ${platform.settings && Object.keys(platform.settings).length > 0 ? `
                         <div class="mt-2">
                             <span class="text-muted block mb-1">Advanced Settings</span>
-                            <div class="bg-surface-hover p-2 rounded text-xs text-secondary">
-                                ${Object.entries(platform.settings).map(([k, v]) => `<div><span class="text-primary">${k}:</span> ${v}</div>`).join('')}
+                            <div class="flex flex-col gap-1">
+                                ${Object.entries(platform.settings).map(([k, v]) => `
+                                    <div class="flex gap-2 items-center">
+                                        <span class="text-secondary" style="min-width: 110px; font-size: 0.75em;">${k}</span>
+                                        <input type="text" value="${v}" id="setting-${name}-${k}"
+                                               class="bg-surface-hover border border-color rounded p-1 flex-1 font-mono" style="font-size: 0.75em;">
+                                    </div>
+                                `).join('')}
                             </div>
                         </div>
                     ` : ''}
+
+                    <div class="flex justify-end mt-2">
+                        <button class="btn btn-primary btn-sm" onclick="savePlatformConfig('${name}')">Save</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -229,11 +244,15 @@ function updateConfigDisplay(config) {
                 <h5 class="mb-2 font-bold">Server</h5>
                 <div class="flex flex-col gap-2 text-sm">
                     ${Object.entries(config.server).map(([k, v]) => `
-                        <div class="flex justify-between border-b border-color pb-1 last:border-0">
+                        <div class="flex justify-between items-center border-b border-color pb-1 last:border-0">
                             <span class="text-muted">${k}</span>
-                            <span class="text-primary font-mono">${v}</span>
+                            <input type="number" value="${v}" id="server-${k}"
+                                   class="bg-surface-hover border border-color rounded p-1 font-mono" style="width: 110px; text-align: right; font-size: 0.85em;">
                         </div>
                     `).join('')}
+                </div>
+                <div class="flex justify-end mt-3">
+                    <button class="btn btn-primary btn-sm" onclick="saveGlobalConfig('server')">Save</button>
                 </div>
             </div>
         `;
@@ -243,13 +262,17 @@ function updateConfigDisplay(config) {
         html += `
             <div class="card p-4">
                 <h5 class="mb-2 font-bold">Transcription</h5>
-                 <div class="flex flex-col gap-2 text-sm">
+                <div class="flex flex-col gap-2 text-sm">
                     ${Object.entries(config.transcription).map(([k, v]) => `
-                        <div class="flex justify-between border-b border-color pb-1 last:border-0">
+                        <div class="flex justify-between items-center border-b border-color pb-1 last:border-0">
                             <span class="text-muted">${k}</span>
-                            <span class="text-primary font-mono">${v}</span>
+                            <input type="text" value="${v}" id="transcription-${k}"
+                                   class="bg-surface-hover border border-color rounded p-1 font-mono" style="width: 110px; text-align: right; font-size: 0.85em;">
                         </div>
                     `).join('')}
+                </div>
+                <div class="flex justify-end mt-3">
+                    <button class="btn btn-primary btn-sm" onclick="saveGlobalConfig('transcription')">Save</button>
                 </div>
             </div>
         `;
@@ -257,25 +280,75 @@ function updateConfigDisplay(config) {
 
     html += '</div>';
 
-    // Add raw view toggle or logic if really needed, but structured is better.
-
     container.innerHTML = html;
 }
 
-// Helper for key visibility
-function toggleKeyVisibility(id) {
-    const input = document.getElementById(id);
-    if (!input) return;
-    input.type = input.type === 'password' ? 'text' : 'password';
+async function savePlatformConfig(platformName) {
+    const rtmpInput = document.getElementById(`rtmp-${platformName}`);
+    const keyInput = document.getElementById(`key-${platformName}`);
+
+    const body = {};
+    if (rtmpInput) body.rtmpUrl = rtmpInput.value;
+    if (keyInput) body.streamKey = keyInput.value;
+
+    const settingInputs = document.querySelectorAll(`[id^="setting-${platformName}-"]`);
+    if (settingInputs.length > 0) {
+        body.settings = {};
+        settingInputs.forEach(input => {
+            const key = input.id.slice(`setting-${platformName}-`.length);
+            body.settings[key] = input.value;
+        });
+    }
+
+    try {
+        const response = await fetch(`/api/platforms/${platformName}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const result = await response.json();
+        if (result.success) {
+            UI.showToast('Settings saved', 'success');
+        } else {
+            UI.showToast('Failed to save: ' + (result.error || 'unknown error'), 'error');
+        }
+    } catch (error) {
+        UI.showToast('Error saving settings', 'error');
+    }
+}
+
+async function saveGlobalConfig(section) {
+    if (!_configCache || !_configCache[section]) return;
+
+    const data = {};
+    Object.keys(_configCache[section]).forEach(key => {
+        const input = document.getElementById(`${section}-${key}`);
+        if (input) {
+            data[key] = input.type === 'number' ? Number(input.value) : input.value;
+        }
+    });
+
+    try {
+        const response = await fetch('/api/config/global', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [section]: data })
+        });
+        const result = await response.json();
+        if (result.success) {
+            UI.showToast('Settings saved', 'success');
+        } else {
+            UI.showToast('Failed to save: ' + (result.error || 'unknown error'), 'error');
+        }
+    } catch (error) {
+        UI.showToast('Error saving settings', 'error');
+    }
 }
 
 function toggleKeyVisibility(elementId) {
     const input = document.getElementById(elementId);
-    if (input.type === 'password') {
-        input.type = 'text';
-    } else {
-        input.type = 'password';
-    }
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
 }
 
 async function updateRecordingFormat(format) {
