@@ -97,7 +97,16 @@ export class StreamManager {
       logger.info('Twitch test mode enabled: Appending ?bandwidthtest=true');
     }
 
+    // Audio track mapping (RTMP fallback path).
+    // RTMP typically carries only one audio track so multi-track features
+    // (twitchVodTrack dual-stream, vodOnly clean mix) require SRT input.
+    // Here we degrade gracefully: vodOnly platforms still get 0:a:0 since
+    // that is the only track available, and twitchVodTrack sends single-track.
+    const audioTrack = platformConfig.settings?.vodOnly ? '0:a:1' : '0:a:0';
+
     const outputOptions = [
+      '-map', '0:v:0',
+      '-map', audioTrack,
       '-f', 'flv',
       '-flvflags', 'no_duration_filesize'
     ];
@@ -201,6 +210,8 @@ export class StreamManager {
       .inputOptions([
       ])
       .outputOptions([
+        '-map', '0:v:0',
+        '-map', '0:a:0',  // RTMP fallback: single track; SRT path uses 0:a:1 via SRTServer
         '-c:v', 'copy',
         '-c:a', 'copy',
         '-movflags', '+faststart'
@@ -242,7 +253,10 @@ export class StreamManager {
 
     logger.info(`Creating browser debug command. Settings: ${JSON.stringify(platformConfig.settings)}`);
 
+    // browser_debug always uses the live/full-mix track (Track 1).
     const outputOptions = [
+      '-map', '0:v:0',
+      '-map', '0:a:0',
       '-f', 'flv',
       '-flvflags', 'no_duration_filesize'
     ];

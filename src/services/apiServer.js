@@ -14,11 +14,13 @@ import { getSystemStats, getProcessStats } from '../utils/systemStats.js';
 import fileUpload from 'express-fileupload';
 
 let streamManager = null;
+let srtServer = null;
 
-export function createAPIServer(streamManagerInstance) {
+export function createAPIServer(streamManagerInstance, srtServerInstance = null) {
   const app = express();
   const config = loadConfig();
   streamManager = streamManagerInstance;
+  srtServer = srtServerInstance;
 
   app.use(express.json());
 
@@ -128,15 +130,13 @@ export function createAPIServer(streamManagerInstance) {
 
   // Get active streams
   app.get('/api/streams', (req, res) => {
-    if (streamManager) {
-      const activeStreams = streamManager.getActiveStreams();
-      res.json({
-        streams: activeStreams,
-        isActive: activeStreams.length > 0
-      });
-    } else {
-      res.json({ streams: [], isActive: false });
-    }
+    const activeStreams = streamManager ? streamManager.getActiveStreams() : [];
+    const srtActive = srtServer ? srtServer.isStreaming : false;
+    res.json({
+      streams: activeStreams,
+      isActive: activeStreams.length > 0 || srtActive,
+      srtActive,
+    });
   });
 
   // Trigger manual config reload

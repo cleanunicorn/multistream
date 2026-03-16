@@ -34,7 +34,9 @@ const defaultConfig = {
   server: {
     rtmpPort: 1935,
     httpStreamingPort: 9000,
-    apiPort: 8000
+    apiPort: 8000,
+    srtEnabled: false,
+    srtPort: 9000       // SRT uses UDP; coexists with NMS HTTP on the same port number
   },
   recording: {
     enabled: false,

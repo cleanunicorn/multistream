@@ -25,27 +25,170 @@
     </div>
 
     <div class="flex flex-col gap-4">
+
+        <!-- OBS Connection -->
         <div class="card">
-            <h3 class="">OBS Configuration</h3>
+            <h3>OBS Connection</h3>
             <div id="obsConfig" class="mt-4">
-                <div class="flex flex-col gap-2">
-                    <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
-                        <span class="text-secondary">Server</span>
-                        <code class="text-primary">rtmp://localhost:1935/live</code>
-                    </div>
-                    <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
-                        <span class="text-secondary">Stream Key</span>
-                        <code class="text-primary">stream</code>
-                    </div>
-                </div>
+                <p class="text-secondary text-sm mb-3">Loading connection info...</p>
             </div>
         </div>
 
+        <!-- Audio Track Setup Guide -->
+        <div class="card">
+            <h3>Audio Track Setup</h3>
+            <p class="text-secondary text-sm mt-1 mb-4">
+                Multi-track audio requires SRT input. Configure two audio tracks in OBS so music is separated from the clean mix.
+            </p>
+
+            <div class="flex flex-col gap-3">
+
+                <!-- Track layout -->
+                <div>
+                    <h5 class="mb-2">Track layout</h5>
+                    <div class="flex flex-col gap-1">
+                        <div class="flex gap-3 p-2 bg-surface-hover rounded border border-color items-start">
+                            <span class="badge badge-neutral" style="min-width:60px;text-align:center;">Track 1</span>
+                            <div>
+                                <div class="font-bold text-sm">Full mix</div>
+                                <div class="text-secondary text-sm">Game + voice + music — sent live to Twitch viewers</div>
+                            </div>
+                        </div>
+                        <div class="flex gap-3 p-2 bg-surface-hover rounded border border-color items-start">
+                            <span class="badge badge-success" style="min-width:60px;text-align:center;">Track 2</span>
+                            <div>
+                                <div class="font-bold text-sm">Clean mix (VOD-safe)</div>
+                                <div class="text-secondary text-sm">Game + voice only, no music — used for recordings, YouTube, Kick, TikTok, and Twitch VODs</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OBS steps -->
+                <div>
+                    <h5 class="mb-2">OBS configuration steps</h5>
+                    <ol class="flex flex-col gap-2 text-sm" style="padding-left:1.2em;">
+                        <li>
+                            <strong>Settings → Output</strong> — set Output Mode to <code>Advanced</code>
+                        </li>
+                        <li>
+                            <strong>Output → Streaming</strong> — set Audio Track to <code>1</code>
+                        </li>
+                        <li>
+                            <strong>Settings → Audio</strong> — make sure at least 2 tracks are active (Tracks 1 and 2)
+                        </li>
+                        <li>
+                            <strong>Audio Mixer</strong> — click the gear icon on each audio source → <em>Advanced Audio Settings</em>:
+                            <ul style="padding-left:1.2em; margin-top:4px;" class="flex flex-col gap-1">
+                                <li>Music sources → enable <strong>Track 1 only</strong> (excluded from clean mix)</li>
+                                <li>Game, voice, alerts → enable <strong>Track 1 and Track 2</strong></li>
+                            </ul>
+                            <div class="mt-3">
+                                <img src="images/obs-audio-tracks.png"
+                                     alt="OBS Advanced Audio Settings showing track assignments per source"
+                                     style="max-width:100%; border-radius:6px; border:1px solid var(--border-color);">
+                                <p class="text-secondary text-sm mt-1">
+                                    Example: Music is assigned to Track 1 only. All other sources use both Track 1 and Track 2.
+                                </p>
+                            </div>
+                        </li>
+                        <li>
+                            <strong>Settings → Output → Audio</strong> — set Audio Encoder to <code>AAC</code> (not Opus) so copy mode works without transcoding
+                        </li>
+                    </ol>
+                </div>
+
+                <!-- Per-platform routing -->
+                <div>
+                    <h5 class="mb-2">Per-platform audio routing (config.yaml)</h5>
+                    <div class="flex flex-col gap-1 text-sm">
+                        <div class="flex gap-3 p-2 bg-surface-hover rounded border border-color items-start">
+                            <code style="min-width:150px;">twitchVodTrack: 2</code>
+                            <div class="text-secondary">Sends both tracks to Twitch + injects VOD metadata. Live viewers hear Track 1; Twitch saves Track 2 to the VOD archive.</div>
+                        </div>
+                        <div class="flex gap-3 p-2 bg-surface-hover rounded border border-color items-start">
+                            <code style="min-width:150px;">vodOnly: true</code>
+                            <div class="text-secondary">Sends only Track 2 (clean mix). Music never reaches the platform. Use for YouTube, Kick, TikTok.</div>
+                        </div>
+                        <div class="flex gap-3 p-2 bg-surface-hover rounded border border-color items-start">
+                            <code style="min-width:150px;">(no setting)</code>
+                            <div class="text-secondary">Sends only Track 1 (full mix). Use for platforms where VOD music licensing is not a concern.</div>
+                        </div>
+                        <div class="flex gap-3 p-2 bg-surface-hover rounded border border-color items-start">
+                            <code style="min-width:150px;">recording</code>
+                            <div class="text-secondary">Always records Track 2 (clean mix) so saved files are VOD-safe.</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Stream Configuration -->
         <div class="card">
             <h3>Stream Configuration (config.yaml)</h3>
             <div id="configContainer">Loading configuration...</div>
         </div>
+
     </div>
+
+    <script>
+        // Populate OBS connection info dynamically based on server config
+        async function loadObsConfig() {
+            try {
+                const res = await fetch('/api/config');
+                const config = await res.json();
+                const server = config.server || {};
+                const srtEnabled = server.srtEnabled;
+                const srtPort = server.srtPort || 9000;
+                const rtmpPort = server.rtmpPort || 1935;
+
+                const origin = window.location.hostname;
+
+                let html = '';
+
+                if (srtEnabled) {
+                    html += `
+                        <div class="mb-3">
+                            <span class="badge badge-success mb-2">SRT (active — multi-track audio)</span>
+                            <div class="flex flex-col gap-1 mt-2">
+                                <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
+                                    <span class="text-secondary text-sm">Server</span>
+                                    <code class="text-primary">srt://${origin}:${srtPort}</code>
+                                </div>
+                                <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
+                                    <span class="text-secondary text-sm">Stream Key</span>
+                                    <code class="text-secondary">(leave empty)</code>
+                                </div>
+                            </div>
+                            <p class="text-secondary text-sm mt-2">In OBS: Settings → Stream → Service: Custom → paste the server URL above.</p>
+                        </div>`;
+                }
+
+                html += `
+                    <div class="${srtEnabled ? 'mt-3 pt-3 border-t border-color' : ''}">
+                        <span class="badge badge-neutral mb-2">RTMP ${srtEnabled ? '(fallback — single audio track)' : '(active)'}</span>
+                        <div class="flex flex-col gap-1 mt-2">
+                            <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
+                                <span class="text-secondary text-sm">Server</span>
+                                <code class="text-primary">rtmp://${origin}:${rtmpPort}/live</code>
+                            </div>
+                            <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
+                                <span class="text-secondary text-sm">Stream Key</span>
+                                <code class="text-primary">stream</code>
+                            </div>
+                        </div>
+                        ${srtEnabled ? '<p class="text-secondary text-sm mt-2">RTMP carries only one audio track — VOD track routing is not available on this path.</p>' : ''}
+                    </div>`;
+
+                document.getElementById('obsConfig').innerHTML = html;
+            } catch (e) {
+                document.getElementById('obsConfig').innerHTML = '<p class="text-secondary text-sm">Failed to load connection info.</p>';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadObsConfig);
+    </script>
 </body>
 
 </html>

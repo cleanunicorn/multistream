@@ -1,5 +1,19 @@
 # Multistream Configuration Example
 # Copy this file to config.yaml and update with your settings
+#
+# ─── Audio track layout (SRT input only) ───────────────────────────────────
+# OBS must be configured to send multiple audio tracks over SRT:
+#   Track 1 – full mix: game + voice + music  (live stream audio)
+#   Track 2 – clean mix: game + voice only    (VOD-safe, no music)
+#
+# Per-platform audio routing is controlled by settings in each platform block:
+#   (no special setting) → Track 1 only  (full mix, for live-only platforms)
+#   vodOnly: true        → Track 2 only  (clean mix, music stripped entirely)
+#   twitchVodTrack: 2    → Both tracks forwarded to Twitch; injects the
+#                          twitch_vod_track_id AMF0 metadata so Twitch uses
+#                          Track 2 for its own VOD archive while live viewers
+#                          hear Track 1.
+# ──────────────────────────────────────────────────────────────────────────
 
 platforms:
   twitch:
@@ -7,35 +21,40 @@ platforms:
     rtmpUrl: rtmp://live.twitch.tv/live
     streamKey: your_twitch_stream_key_here
     settings:
-      # Add any platform-specific settings here
-      # Strict 6000kbps CBR for Twitch
+      # Both audio tracks are forwarded. Twitch saves Track 2 for its VOD.
+      # Live viewers hear Track 1 (full mix with music).
+      twitchVodTrack: 2
       transcode: true
       videoBitrate: 6000k
       bufferSize: 12000k
       audioBitrate: 160k
       fps: 30
-      gop: 60 # 2 seconds keyframe interval
+      gop: 60       # 2-second keyframe interval
       preset: veryfast
-      inputBuffer: 3000 # 3 seconds input buffer
+      inputBuffer: 3000   # 3-second input buffer
+
   youtube:
     enabled: true
     rtmpUrl: rtmp://a.rtmp.youtube.com/live2
     streamKey: your_youtube_stream_key_here
     settings:
-      # Add any platform-specific settings here
-      
+      # YouTube saves live streams as VODs automatically.
+      # vodOnly: true sends only Track 2 (no music) so the archive is DMCA-safe.
+      vodOnly: true
+
   kick:
     enabled: false
     rtmpUrl: rtmp://fa723fc1b171.global-contribute.live-video.net/live
     streamKey: your_kick_stream_key_here
     settings:
-      # Add any platform-specific settings here
+      # No vodOnly/twitchVodTrack → receives Track 1 (full mix).
 
   tiktok:
     enabled: false
     rtmpUrl: rtmp://push.tiktok.com/live
     streamKey: your_tiktok_stream_key_here
     settings:
+      # No vodOnly → receives Track 1 (full mix).
       transcode: true
       videoBitrate: 6000k
       bufferSize: 4000k
@@ -49,24 +68,32 @@ platforms:
     rtmpUrl: local
     streamKey: debug
     settings:
-      # This platform streams to the local HTTP server for browser playback
-      # Supports transcoding settings (transcode: true, videoBitrate, etc.)
+      # Always receives Track 1 (full mix) for live monitoring.
       httpPath: /live/stream.flv
 
-  # Virtual platform for local recording
+  # Virtual platform for local recording.
+  # Always records Track 2 (clean mix) so saved files are VOD-safe.
   # recording:
   #   enabled: true
   #   path: ./recordings
   #   format: mp4
+
 server:
   rtmpPort: 1935
   apiPort: 8000
   httpStreamingPort: 9000
 
+  # SRT input (primary – required for multi-track audio routing above).
+  # SRT uses UDP so it coexists on port 9000 alongside the NMS HTTP server (TCP).
+  # Point OBS to: srt://<host>:9000
+  # RTMP (rtmp://<host>:1935/live) remains active as a single-track fallback.
+  srtEnabled: false
+  srtPort: 9000
+
 transcription:
   model: large # Options: tiny, base, small, medium, large
 
-# You can add more platforms by following the same structure
+# You can add more platforms by following the same structure:
 # custom_platform:
 #   enabled: false
 #   rtmpUrl: rtmp://custom.platform.com/live

@@ -1,19 +1,21 @@
 # Multistream Server
 
-A Node.js RTMP server that receives streams from OBS and restreams them to multiple platforms simultaneously including Twitch, YouTube, Kick, and more.
+A Node.js server that receives streams from OBS and restreams them to multiple platforms simultaneously — with full multi-track audio support for VOD-safe streams.
 
 <img width="918" height="784" alt="image" src="https://github.com/user-attachments/assets/9a16f860-2b90-4c9e-946c-2e913addee3e" />
 
 
 ## Features
 
-- 📡 RTMP server to receive OBS streams
-- 🔄 Simultaneous restreaming to multiple platforms
-- 🎮 Support for Twitch, YouTube, Kick (easily extensible)
-- 🌐 Web dashboard for monitoring
+- 📡 SRT input (primary) — preserves multi-track audio from OBS for VOD-safe routing
+- 🔄 RTMP input (fallback) — single-track, standard OBS streaming
+- 🎵 Per-platform audio track routing (full mix, clean/VOD mix, or Twitch dual-track)
+- 🔁 Simultaneous restreaming to multiple platforms (Twitch, YouTube, Kick, TikTok, custom)
+- 🌐 Web dashboard for monitoring and live control
 - 🐳 Docker support
-- 🔧 Configuration via YAML file
-- 🔍 Browser debug mode to preview streams in the dashboard
+- 🔧 Live config reload — toggle platforms on/off without restarting
+- 🔍 Browser debug mode to preview the stream in the dashboard
+- 🎙️ Automatic transcription of recordings
 
 ## Screenshots
 
@@ -38,8 +40,8 @@ A Node.js RTMP server that receives streams from OBS and restreams them to multi
    npm install
    ```
 
-   Install ffpmeg.
-   ```
+   Install FFmpeg:
+   ```bash
    sudo apt install ffmpeg
    ```
 
@@ -54,9 +56,7 @@ A Node.js RTMP server that receives streams from OBS and restreams them to multi
    npm start
    ```
 
-4. **Configure OBS:**
-   - Server: `rtmp://localhost:1935/live`
-   - Stream Key: `stream`
+4. **Configure OBS** — see [OBS Setup](#obs-setup) below.
 
 5. **View dashboard:**
    Open `http://localhost:8000` in your browser
@@ -90,9 +90,87 @@ A Node.js RTMP server that receives streams from OBS and restreams them to multi
    docker compose exec multistream nvidia-smi
    ```
 
-## Configuration
+---
 
-### YAML Configuration (config.yaml)
+## OBS Setup
+
+### SRT Input (recommended — required for VOD-safe audio)
+
+Enable SRT in `config.yaml`:
+
+```yaml
+server:
+  srtEnabled: true
+  srtPort: 9000
+```
+
+In OBS: **Settings → Stream**
+
+| Field | Value |
+|-------|-------|
+| Service | Custom |
+| Server | `srt://YOUR_SERVER_IP:9000` |
+| Stream Key | *(leave empty)* |
+
+### RTMP Input (fallback — single audio track only)
+
+```
+Server:     rtmp://localhost:1935/live
+Stream Key: stream
+```
+
+---
+
+## Audio Track Setup (OBS)
+
+Multi-track audio routing requires SRT input. The server routes audio based on per-platform config:
+
+| Track | Content | Used by |
+|-------|---------|---------|
+| Track 1 | Full mix — game, voice, **music** | Twitch live stream |
+| Track 2 | Clean mix — game, voice, **no music** | YouTube, Kick, TikTok, recordings, Twitch VOD |
+
+### Configure tracks in OBS
+
+1. **Settings → Output → Set Output Mode to Advanced**
+2. **Output → Streaming tab → set Audio Track to track 1**
+3. **Settings → Audio → set up to 6 tracks**
+4. In the **Audio Mixer**, click the gear icon on each source → **Advanced Audio Settings** → assign each source to the appropriate tracks:
+   - Music sources: enable **Track 1 only** (so they are excluded from the clean mix on Track 2)
+   - Game, voice, alerts: enable **both Track 1 and Track 2**
+5. Make sure the **audio encoder is AAC** (not Opus) so passthrough mode works without transcoding
+
+### Twitch VOD track
+
+Twitch supports a special dual-track mode where the live stream uses the full mix and the saved VOD uses the clean mix. Configure in `config.yaml`:
+
+```yaml
+platforms:
+  twitch:
+    settings:
+      twitchVodTrack: 2   # send both tracks; tell Twitch to use track 2 for VOD
+```
+
+The server sends both audio tracks and injects the `twitch_vod_track_id` AMF0 metadata so Twitch saves the clean track to the VOD archive while live viewers hear the full mix.
+
+### VOD-only platforms (YouTube, Kick, TikTok)
+
+These platforms receive only the clean track — music is never sent:
+
+```yaml
+platforms:
+  youtube:
+    settings:
+      vodOnly: true   # send only Track 2 (clean mix, no music)
+```
+
+### Local recording
+
+The local recording always uses Track 2 (clean/VOD-safe) so saved files are music-free.
+
+---
+
+## Configuration Reference
 
 ```yaml
 platforms:
@@ -100,42 +178,69 @@ platforms:
     enabled: true
     rtmpUrl: rtmp://live.twitch.tv/live
     streamKey: your_twitch_stream_key
-    
+    settings:
+      twitchVodTrack: 2     # Twitch dual-track VOD mode
+      transcode: false      # true = re-encode video; false = copy (lower CPU)
+      videoBitrate: 6000k
+      audioBitrate: 160k
+
   youtube:
     enabled: true
     rtmpUrl: rtmp://a.rtmp.youtube.com/live2
     streamKey: your_youtube_stream_key
-    
+    settings:
+      vodOnly: true         # send only the clean/VOD track (Track 2)
+      transcode: false
+
   kick:
     enabled: false
-    rtmpUrl: rtmps://fa723fc1b171.global-contribute.live-video.net/live
+    rtmpUrl: rtmps://fa723fc1b171.global-contribute.live-video.net/app
     streamKey: your_kick_stream_key
+    settings:
+      vodOnly: true
 
 server:
   rtmpPort: 1935
   httpStreamingPort: 9000
   apiPort: 8000
+  srtEnabled: true
+  srtPort: 9000
 
 recording:
   enabled: false
   path: ./recordings
-  format: mp4
+  format: mp4            # mp4 | mkv | flv
 ```
 
-### Browser Debug Mode
+### Platform audio modes
 
-The `browser_debug` platform allows you to preview your stream directly in the web dashboard. When enabled, you can view your stream at `http://localhost:8000` (or `http://YOUR_IP:8000` from other devices on your network) in the Debug Stream Player section. This is useful for:
+| Setting | Audio sent | Use case |
+|---------|-----------|----------|
+| *(none)* | Track 1 — full mix | Live-only platforms, no VOD concerns |
+| `vodOnly: true` | Track 2 — clean mix | YouTube, Kick, TikTok |
+| `twitchVodTrack: 2` | Both tracks + VOD metadata | Twitch |
 
-- Testing your stream setup without going live
-- Monitoring stream quality and latency
-- Debugging encoding issues
-- Viewing the stream from multiple devices (phones, tablets, other computers)
+### Transcoding
 
-**Note**: The server will log your network IP addresses on startup for easy remote access.
+When `transcode: false` (default), video and audio are copied as-is — minimal CPU usage. Set `transcode: true` if you need the server to re-encode (e.g. different bitrates per platform, or incompatible source codec).
+
+> **Note:** Copy mode requires OBS to output AAC audio. If OBS is configured to use Opus (common with SRT), set `transcode: true` to re-encode to AAC automatically.
+
+---
+
+## Browser Debug Mode
+
+The `browser_debug` platform streams to NMS locally and plays back in the web dashboard. Useful for:
+
+- Testing your setup without going live
+- Monitoring stream quality
+- Viewing from other devices on your network (the server logs your network IPs on startup)
+
+Always uses Track 1 (full mix) for live monitoring.
+
+---
 
 ## Adding Custom Platforms
-
-Edit `config.yaml` to add new platforms:
 
 ```yaml
 platforms:
@@ -143,7 +248,11 @@ platforms:
     enabled: true
     rtmpUrl: rtmp://custom.platform.com/live
     streamKey: your_custom_key
+    settings:
+      vodOnly: true   # optional — omit for full mix
 ```
+
+---
 
 ## Development
 
