@@ -71,12 +71,12 @@ platforms:
       # Always receives Track 1 (full mix) for live monitoring.
       httpPath: /live/stream.flv
 
-  # Virtual platform for local recording.
-  # Always records Track 2 (clean mix) so saved files are VOD-safe.
-  # recording:
-  #   enabled: true
-  #   path: ./recordings
-  #   format: mp4
+# Local recording (root-level, not under platforms).
+# Always records Track 2 (clean mix) so saved files are VOD-safe.
+# recording:
+#   enabled: true
+#   path: ./recordings
+#   format: mp4
 
 server:
   rtmpPort: 1935
