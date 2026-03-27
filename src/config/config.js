@@ -44,7 +44,7 @@ const defaultConfig = {
     format: 'mp4'
   },
   transcription: {
-    model: 'large'
+    autoTranscribe: true
   }
 };
 

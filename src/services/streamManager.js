@@ -227,8 +227,9 @@ export class StreamManager {
           logger.info(`Recording stopped (SIGINT): ${outputPath}`);
 
           // Automatic transcription
-          transcribeFile(outputPath);
-          return;
+          if (this.config.transcription?.autoTranscribe) {
+            transcribeFile(outputPath);
+          }
           return;
         }
 
@@ -238,7 +239,9 @@ export class StreamManager {
         logger.info(`Recording completed: ${outputPath}`);
 
         // Automatic transcription
-        transcribeFile(outputPath);
+        if (this.config.transcription?.autoTranscribe) {
+          transcribeFile(outputPath);
+        }
       });
 
     command.run();

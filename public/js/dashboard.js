@@ -263,13 +263,26 @@ function updateConfigDisplay(config) {
             <div class="card p-4">
                 <h5 class="mb-2 font-bold">Transcription</h5>
                 <div class="flex flex-col gap-2 text-sm">
-                    ${Object.entries(config.transcription).map(([k, v]) => `
-                        <div class="flex justify-between items-center border-b border-color pb-1 last:border-0">
-                            <span class="text-muted">${k}</span>
-                            <input type="text" value="${v}" id="transcription-${k}"
-                                   class="bg-surface-hover border border-color rounded p-1 font-mono" style="width: 110px; text-align: right; font-size: 0.85em;">
-                        </div>
-                    `).join('')}
+                    ${Object.entries(config.transcription).map(([k, v]) => {
+                        if (typeof v === 'boolean') {
+                            return `
+                                <div class="flex justify-between items-center border-b border-color pb-1 last:border-0">
+                                    <span class="text-muted">${k}</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="transcription-${k}" ${v ? 'checked' : ''}>
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            `;
+                        }
+                        return `
+                            <div class="flex justify-between items-center border-b border-color pb-1 last:border-0">
+                                <span class="text-muted">${k}</span>
+                                <input type="text" value="${v}" id="transcription-${k}"
+                                       class="bg-surface-hover border border-color rounded p-1 font-mono" style="width: 110px; text-align: right; font-size: 0.85em;">
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
                 <div class="flex justify-end mt-3">
                     <button class="btn btn-primary btn-sm" onclick="saveGlobalConfig('transcription')">Save</button>
@@ -324,7 +337,9 @@ async function saveGlobalConfig(section) {
     Object.keys(_configCache[section]).forEach(key => {
         const input = document.getElementById(`${section}-${key}`);
         if (input) {
-            data[key] = input.type === 'number' ? Number(input.value) : input.value;
+            if (input.type === 'checkbox') data[key] = input.checked;
+            else if (input.type === 'number') data[key] = Number(input.value);
+            else data[key] = input.value;
         }
     });
 

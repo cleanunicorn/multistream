@@ -91,7 +91,7 @@ server:
   srtPort: 9000
 
 transcription:
-  model: large # Options: tiny, base, small, medium, large
+  autoTranscribe: true # Automatically transcribe recordings when streaming ends
 
 # You can add more platforms by following the same structure:
 # custom_platform:
