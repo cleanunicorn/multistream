@@ -56,7 +56,7 @@ function handleFiles(files) {
     // Validate
     for (let i = 0; i < files.length; i++) {
         if (!files[i].type.startsWith('video/')) {
-            alert(`File "${files[i].name}" is not a video.`);
+            UI.showToast(`File "${files[i].name}" is not a video.`, 'error');
             return;
         }
     }
@@ -246,13 +246,14 @@ async function deleteRecording(filename) {
         });
 
         if (response.ok) {
+            UI.showToast('Recording deleted', 'success');
             loadFiles();
         } else {
-            alert('Failed to delete file');
+            UI.showToast('Failed to delete file', 'error');
         }
     } catch (error) {
         console.error('Error deleting file:', error);
-        alert('Error deleting file');
+        UI.showToast('Error deleting file', 'error');
     }
 }
 
@@ -270,16 +271,16 @@ async function transcribe(filename, btn) {
     try {
         const response = await fetch(`/api/recordings/${filename}/transcribe`, { method: 'POST' });
         if (response.ok) {
-            // Success - do nothing, let the polling update the UI
+            UI.showToast('Transcription started', 'success');
         } else {
             processingFiles.delete(filename);
-            alert('Failed to start transcription');
+            UI.showToast('Failed to start transcription', 'error');
             loadFiles(); // Restore state
         }
     } catch (error) {
         console.error('Error starting transcription:', error);
         processingFiles.delete(filename);
-        alert('Error starting transcription');
+        UI.showToast('Error starting transcription', 'error');
         loadFiles(); // Restore state
     }
 }

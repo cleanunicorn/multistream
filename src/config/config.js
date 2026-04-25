@@ -115,3 +115,22 @@ export function initConfig() {
   currentConfig = loadConfig();
   return currentConfig;
 }
+
+/**
+ * Manually trigger a config reload and notify listeners if it changed.
+ * Useful after programmatically updating the config file.
+ */
+export function reloadAndNotify() {
+  try {
+    const newConfig = loadConfig();
+    if (JSON.stringify(newConfig) !== JSON.stringify(currentConfig)) {
+      logger.info('Configuration updated programmatically, notifying listeners...');
+      currentConfig = newConfig;
+      configEvents.emit('configReloaded', newConfig);
+      return true;
+    }
+  } catch (error) {
+    logger.error('Error in manual config reload:', error);
+  }
+  return false;
+}

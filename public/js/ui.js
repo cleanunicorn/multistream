@@ -25,7 +25,6 @@ const UI = {
 
             const sidebar = document.createElement('aside');
             sidebar.className = 'sidebar';
-            sidebar.className = 'sidebar';
             sidebar.innerHTML = `
                 <div class="sidebar-header">
                     <div class="logo-text">Multistream</div>
@@ -104,7 +103,6 @@ const UI = {
         if (pagename.includes('recordings')) pagename = 'recordings';
         if (pagename.includes('resources')) pagename = 'resources';
         if (pagename.includes('settings')) pagename = 'settings';
-        if (pagename.includes('settings')) pagename = 'settings';
 
         const navItems = document.querySelectorAll('.nav-item');
         navItems.forEach(item => {
@@ -167,6 +165,31 @@ const UI = {
             toast.style.transform = 'translateY(20px)';
             setTimeout(() => toast.remove(), 300);
         }, 3000);
+    },
+
+    // Copy to clipboard helper
+    copyToClipboard: function (text, label = 'Content') {
+        if (!navigator.clipboard) {
+            // Fallback for older browsers
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                this.showToast(`${label} copied to clipboard`, 'success');
+            } catch (err) {
+                this.showToast(`Failed to copy ${label}`, 'error');
+            }
+            document.body.removeChild(textArea);
+            return;
+        }
+
+        navigator.clipboard.writeText(text).then(() => {
+            this.showToast(`${label} copied to clipboard`, 'success');
+        }, (err) => {
+            this.showToast(`Failed to copy ${label}`, 'error');
+        });
     }
 };
 

@@ -88,8 +88,18 @@ async function reloadConfig() {
 
 async function loadStatus() {
     try {
-        const response = await fetch('/api/config');
-        const config = await response.json();
+        const [configResponse, streamsResponse] = await Promise.all([
+            fetch('/api/config'),
+            fetch('/api/streams')
+        ]);
+
+        const config = await configResponse.json();
+        const streamsData = await streamsResponse.json();
+        const activePlatforms = new Set();
+        (streamsData.streams || []).forEach(s => {
+            (s.platforms || []).forEach(p => activePlatforms.add(p));
+        });
+
         const platformsDiv = document.getElementById('platforms');
         if (platformsDiv) {
             platformsDiv.innerHTML = '';
@@ -105,6 +115,7 @@ async function loadStatus() {
                 const canToggle = hasKey;
 
                 const isRecording = name === 'recording';
+                const isLive = activePlatforms.has(name) || (name === 'recording' && streamsData.isActive);
 
                 div.innerHTML = `
             <div class="platform-info">
@@ -113,6 +124,7 @@ async function loadStatus() {
                 ${platform.enabled ? '✓ Enabled' : '✗ Disabled'}
                 ${!hasKey && !isRecording ? ' (No key configured)' : ''}
               </span>
+              ${isLive ? '<span class="badge badge-success ml-4">LIVE</span>' : ''}
               ${isRecording ? `
                 <div style="display: inline-block; margin-left: 10px;">
                     <select onchange="updateRecordingFormat(this.value)" style="padding: 2px 6px; background: var(--bg-body); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; font-size: 0.9em;">
@@ -377,9 +389,10 @@ async function updateRecordingFormat(format) {
         if (!response.ok) {
             throw new Error('Failed to update format');
         }
+        UI.showToast(`Recording format updated to ${format.toUpperCase()}`, 'success');
     } catch (error) {
         console.error('Error updating format:', error);
-        alert('Error updating format');
+        UI.showToast('Error updating format', 'error');
         loadStatus(); // Revert UI
     }
 }
@@ -554,13 +567,15 @@ async function toggleTestMode(platformName, checkbox) {
 
         if (!result.success) {
             checkbox.checked = !checkbox.checked;
-            alert(result.message);
+            UI.showToast(result.message, 'error');
+        } else {
+            UI.showToast(result.message, 'success');
         }
         // No need to reload whole status for this
     } catch (error) {
         console.error('Error toggling test mode:', error);
         checkbox.checked = !checkbox.checked;
-        alert('Failed to toggle test mode');
+        UI.showToast('Failed to toggle test mode', 'error');
     } finally {
         checkbox.disabled = false;
     }

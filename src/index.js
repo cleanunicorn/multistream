@@ -16,9 +16,8 @@ async function main() {
     rtmpServer.run();
 
     // Create SRT server early so the API can reference its active state
-    let srtServer = null;
+    const srtServer = new SRTServer();
     if (config.server.srtEnabled) {
-      srtServer = new SRTServer();
       srtServer.start();
       logger.info(`SRT input enabled on UDP port ${config.server.srtPort}`);
       logger.info(`OBS Stream URL (SRT):  srt://localhost:${config.server.srtPort}`);
