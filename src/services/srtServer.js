@@ -42,8 +42,33 @@ export class SRTServer {
     this.restartTimer = null;
 
     configEvents.on('configReloaded', (newConfig) => {
+      const oldSig = this._getConfigSignature(this.config);
+      const newSig = this._getConfigSignature(newConfig);
+      const oldEnabled = this.config.server?.srtEnabled;
+      const newEnabled = newConfig.server?.srtEnabled;
+
       this.config = newConfig;
+
+      // Handle enable/disable
+      if (!oldEnabled && newEnabled) {
+        logger.info('SRT: Server enabled via configuration');
+        this.start();
+        return;
+      } else if (oldEnabled && !newEnabled) {
+        logger.info('SRT: Server disabled via configuration');
+        this.stop();
+        return;
+      }
+
       if (!this.isRunning) return;
+
+      if (oldSig === newSig) {
+        logger.debug('SRT: Configuration changed but SRT outputs are unaffected. Skipping restart.');
+        return;
+      }
+
+      logger.info('SRT: Configuration changed affecting SRT outputs, restarting...');
+
       // Restart the FFmpeg process so the new config takes effect immediately.
       // If OBS is actively streaming it will briefly disconnect and auto-reconnect.
       // We only kill here — the error handler's _scheduleRestart() handles the
@@ -273,5 +298,31 @@ export class SRTServer {
     }
 
     return { command: cmd, recordingOutputPath };
+  }
+
+  _getConfigSignature(config) {
+    const srtConfig = {
+      srtPort: config.server?.srtPort,
+      rtmpPort: config.server?.rtmpPort, // used for browser_debug output
+      platforms: {},
+      recording: config.recording ? {
+        enabled: config.recording.enabled,
+        path: config.recording.path,
+        format: config.recording.format
+      } : null
+    };
+
+    for (const [name, p] of Object.entries(config.platforms || {})) {
+      if (p.enabled && (p.streamKey || name === 'browser_debug')) {
+        srtConfig.platforms[name] = {
+          rtmpUrl: p.rtmpUrl,
+          streamKey: p.streamKey,
+          test_mode: p.test_mode,
+          settings: p.settings
+        };
+      }
+    }
+
+    return JSON.stringify(srtConfig);
   }
 }

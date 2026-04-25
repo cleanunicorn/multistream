@@ -1,7 +1,7 @@
 import express from 'express';
 import { exec } from 'child_process';
 import logger from '../utils/logger.js';
-import { loadConfig, configEvents } from '../config/config.js';
+import { loadConfig, configEvents, reloadAndNotify } from '../config/config.js';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import fs from 'fs';
 import path from 'path';
@@ -142,12 +142,11 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
   // Trigger manual config reload
   app.post('/api/reload-config', (req, res) => {
     try {
-      const newConfig = loadConfig();
-      configEvents.emit('configReloaded', newConfig);
+      const reloaded = reloadAndNotify();
       logger.info('Manual configuration reload triggered');
       res.json({
         success: true,
-        message: 'Configuration reloaded successfully',
+        message: reloaded ? 'Configuration reloaded successfully' : 'Configuration was already up to date',
         timestamp: new Date().toISOString()
       });
     } catch (error) {
@@ -187,6 +186,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       });
       fs.writeFileSync(configPath, updatedYaml);
 
+      reloadAndNotify();
       logger.info(`Recording format updated to ${format}`);
 
       res.json({ success: true, format });
@@ -205,16 +205,16 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
     tempFileDir: path.join(process.cwd(), 'tmp')
   }));
 
-  app.post('/api/recordings/upload', (req, res) => {
+  app.post('/api/recordings/upload', async (req, res) => {
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({ error: 'No files were uploaded.' });
     }
 
-    const videoFile = req.files.video;
+    let videoFiles = req.files.video;
 
-    // Check if it's a video
-    if (!videoFile.mimetype.startsWith('video/')) {
-      return res.status(400).json({ error: 'Only video files are allowed!' });
+    // If it's a single file, make it an array for consistent processing
+    if (!Array.isArray(videoFiles)) {
+      videoFiles = [videoFiles];
     }
 
     const recPath = config.recording && config.recording.path ?
@@ -226,19 +226,39 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       fs.mkdirSync(recPath, { recursive: true });
     }
 
-    // Determine filename
-    const safeName = videoFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const uploadPath = path.join(recPath, safeName);
+    const uploadedFiles = [];
+    const errors = [];
 
-    // Move file
-    videoFile.mv(uploadPath, function (err) {
-      if (err) {
-        logger.error('File upload error:', err);
-        return res.status(500).json({ error: err.message });
+    for (const videoFile of videoFiles) {
+      // Check if it's a video
+      if (!videoFile.mimetype.startsWith('video/')) {
+        errors.push({ name: videoFile.name, error: 'Only video files are allowed!' });
+        continue;
       }
 
-      logger.info(`File uploaded: ${safeName}`);
-      res.json({ success: true, filename: safeName });
+      // Determine filename
+      const safeName = videoFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const uploadPath = path.join(recPath, safeName);
+
+      try {
+        await videoFile.mv(uploadPath);
+        logger.info(`File uploaded: ${safeName}`);
+        uploadedFiles.push(safeName);
+      } catch (err) {
+        logger.error(`File upload error for ${videoFile.name}:`, err);
+        errors.push({ name: videoFile.name, error: err.message });
+      }
+    }
+
+    if (uploadedFiles.length === 0 && errors.length > 0) {
+      return res.status(500).json({ error: 'All uploads failed', details: errors });
+    }
+
+    res.json({
+      success: true,
+      message: `${uploadedFiles.length} file(s) uploaded successfully.`,
+      filenames: uploadedFiles,
+      errors: errors.length > 0 ? errors : undefined
     });
   });
 
@@ -281,6 +301,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       const updatedYaml = yaml.stringify(yamlConfig, { indent: 2, lineWidth: 0 });
       fs.writeFileSync(configPath, updatedYaml);
 
+      reloadAndNotify();
       logger.info(`Platform ${platform} configuration updated`);
       res.json({ success: true });
     } catch (error) {
@@ -310,6 +331,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       const updatedYaml = yaml.stringify(yamlConfig, { indent: 2, lineWidth: 0 });
       fs.writeFileSync(configPath, updatedYaml);
 
+      reloadAndNotify();
       logger.info('Global configuration updated');
       res.json({ success: true });
     } catch (error) {
@@ -350,6 +372,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
         });
         fs.writeFileSync(configPath, updatedYaml);
 
+        reloadAndNotify();
         const isEnabled = yamlConfig.recording.enabled;
         logger.info(`Recording toggled to ${isEnabled ? 'enabled' : 'disabled'}`);
 
@@ -384,6 +407,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       });
       fs.writeFileSync(configPath, updatedYaml);
 
+      reloadAndNotify();
       logger.info(`Platform ${platform} toggled to ${yamlConfig.platforms[platform].enabled ? 'enabled' : 'disabled'}`);
 
       // The file watcher will automatically trigger a config reload
@@ -441,6 +465,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       });
       fs.writeFileSync(configPath, updatedYaml);
 
+      reloadAndNotify();
       logger.info(`Platform ${platform} test mode toggled to ${yamlConfig.platforms[platform].test_mode}`);
 
       res.json({

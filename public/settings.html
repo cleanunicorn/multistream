@@ -148,13 +148,17 @@
                 let html = '';
 
                 if (srtEnabled) {
+                    const srtUrl = `srt://${origin}:${srtPort}`;
                     html += `
                         <div class="mb-3">
                             <span class="badge badge-success mb-2">SRT (active — multi-track audio)</span>
                             <div class="flex flex-col gap-1 mt-2">
-                                <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
+                                <div class="flex justify-between items-center p-2 bg-surface-hover rounded border border-color">
                                     <span class="text-secondary text-sm">Server</span>
-                                    <code class="text-primary">srt://${origin}:${srtPort}</code>
+                                    <div class="flex items-center gap-2">
+                                        <code class="text-primary">${srtUrl}</code>
+                                        <button class="btn btn-secondary btn-sm" onclick="UI.copyToClipboard('${srtUrl}', 'SRT URL')">📋</button>
+                                    </div>
                                 </div>
                                 <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
                                     <span class="text-secondary text-sm">Stream Key</span>
@@ -165,17 +169,24 @@
                         </div>`;
                 }
 
+                const rtmpUrl = `rtmp://${origin}:${rtmpPort}/live`;
                 html += `
                     <div class="${srtEnabled ? 'mt-3 pt-3 border-t border-color' : ''}">
                         <span class="badge badge-neutral mb-2">RTMP ${srtEnabled ? '(fallback — single audio track)' : '(active)'}</span>
                         <div class="flex flex-col gap-1 mt-2">
-                            <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
+                            <div class="flex justify-between items-center p-2 bg-surface-hover rounded border border-color">
                                 <span class="text-secondary text-sm">Server</span>
-                                <code class="text-primary">rtmp://${origin}:${rtmpPort}/live</code>
+                                <div class="flex items-center gap-2">
+                                    <code class="text-primary">${rtmpUrl}</code>
+                                    <button class="btn btn-secondary btn-sm" onclick="UI.copyToClipboard('${rtmpUrl}', 'RTMP URL')">📋</button>
+                                </div>
                             </div>
-                            <div class="flex justify-between p-2 bg-surface-hover rounded border border-color">
+                            <div class="flex justify-between items-center p-2 bg-surface-hover rounded border border-color">
                                 <span class="text-secondary text-sm">Stream Key</span>
-                                <code class="text-primary">stream</code>
+                                <div class="flex items-center gap-2">
+                                    <code class="text-primary">stream</code>
+                                    <button class="btn btn-secondary btn-sm" onclick="UI.copyToClipboard('stream', 'Stream Key')">📋</button>
+                                </div>
                             </div>
                         </div>
                         ${srtEnabled ? '<p class="text-secondary text-sm mt-2">RTMP carries only one audio track — VOD track routing is not available on this path.</p>' : ''}
