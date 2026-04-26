@@ -13,6 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     updatePlayerVisibility();
     loadStatus();
+
+    // Auto-refresh every 5 seconds
+    setInterval(loadStatus, 5000);
 });
 
 function togglePlayer(enabled) {
@@ -184,6 +187,13 @@ let _configCache = null;
 function updateConfigDisplay(config) {
     const container = document.getElementById('configContainer');
     if (!container) return;
+
+    // Don't re-render if user is currently typing in an input
+    if (document.activeElement &&
+        (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') &&
+        container.contains(document.activeElement)) {
+        return;
+    }
 
     _configCache = config;
     let html = '';

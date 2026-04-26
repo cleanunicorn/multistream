@@ -40,6 +40,7 @@ export class SRTServer {
     this.isRunning = false;
     this.isStreaming = false;
     this.restartTimer = null;
+    this.activePlatforms = [];
 
     configEvents.on('configReloaded', (newConfig) => {
       const oldSig = this._getConfigSignature(this.config);
@@ -103,6 +104,11 @@ export class SRTServer {
       try { this.activeCommand.kill('SIGINT'); } catch (_) {}
       this.activeCommand = null;
     }
+    this.activePlatforms = [];
+  }
+
+  getActivePlatforms() {
+    return this.isStreaming ? this.activePlatforms : [];
   }
 
   // ─── private ──────────────────────────────────────────────────────────────
@@ -111,14 +117,16 @@ export class SRTServer {
     if (!this.isRunning) return;
 
     const srtUrl = `srt://0.0.0.0:${this.config.server.srtPort}?mode=listener`;
-    const { command, recordingOutputPath } = this._buildCommand(srtUrl);
+    const { command, recordingOutputPath, platforms } = this._buildCommand(srtUrl);
 
     if (!command) {
       logger.warn('SRT: no outputs configured – listener not started');
+      this.activePlatforms = [];
       return;
     }
 
     this.activeCommand = command;
+    this.activePlatforms = platforms;
 
     command
       .on('start', (cmdLine) => {
@@ -137,14 +145,18 @@ export class SRTServer {
         } else {
           logger.error('SRT: FFmpeg error:', msg);
         }
-        if (recordingOutputPath) transcribeFile(recordingOutputPath);
+        if (recordingOutputPath && this.config.transcription?.autoTranscribe) {
+          transcribeFile(recordingOutputPath);
+        }
         this.isStreaming = false;
         this.activeCommand = null;
         this._scheduleRestart();
       })
       .on('end', () => {
         logger.info('SRT: stream ended – OBS disconnected');
-        if (recordingOutputPath) transcribeFile(recordingOutputPath);
+        if (recordingOutputPath && this.config.transcription?.autoTranscribe) {
+          transcribeFile(recordingOutputPath);
+        }
         this.isStreaming = false;
         this.activeCommand = null;
         this._scheduleRestart();
@@ -164,15 +176,16 @@ export class SRTServer {
 
   /**
    * Build one FFmpeg command with all enabled platform outputs.
-   * Returns { command, recordingOutputPath }.
+   * Returns { command, recordingOutputPath, platforms }.
    */
   _buildCommand(srtUrl) {
     const cmd = ffmpeg(srtUrl);
     let hasOutputs = false;
     let recordingOutputPath = null;
+    const activePlatforms = [];
 
     const platforms = Object.keys(this.config.platforms).filter(
-      (p) => this.config.platforms[p].enabled && this.config.platforms[p].streamKey
+      (p) => this.config.platforms[p].enabled && (this.config.platforms[p].streamKey || p === 'browser_debug')
     );
 
     for (const platform of platforms) {
@@ -192,6 +205,7 @@ export class SRTServer {
             '-flvflags', 'no_duration_filesize',
           ]);
         hasOutputs = true;
+        activePlatforms.push(platform);
         continue;
       }
 
@@ -235,6 +249,7 @@ export class SRTServer {
         cmd.output(outputUrl).outputOptions(outputOptions);
         logger.info(`SRT: Twitch dual-track – VOD track id ${vodTrackId}`);
         hasOutputs = true;
+        activePlatforms.push(platform);
         continue;
       }
 
@@ -265,6 +280,7 @@ export class SRTServer {
 
       cmd.output(outputUrl).outputOptions(outputOptions);
       hasOutputs = true;
+      activePlatforms.push(platform);
     }
 
     // ── Local recording: always clean/VOD track ───────────────────────────
@@ -291,13 +307,14 @@ export class SRTServer {
           '-movflags', '+faststart',
         ]);
       hasOutputs = true;
+      activePlatforms.push('recording');
     }
 
     if (!hasOutputs) {
-      return { command: null, recordingOutputPath: null };
+      return { command: null, recordingOutputPath: null, platforms: [] };
     }
 
-    return { command: cmd, recordingOutputPath };
+    return { command: cmd, recordingOutputPath, platforms: activePlatforms };
   }
 
   _getConfigSignature(config) {

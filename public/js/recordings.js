@@ -286,8 +286,97 @@ async function transcribe(filename, btn) {
 }
 
 function openPlayer(filename) {
-    window.open(`/player.html?recording=${encodeURIComponent(filename)}`, '_blank');
+    const modal = document.getElementById('videoModal');
+    const video = document.getElementById('videoPlayerModal');
+    const title = document.getElementById('modalTitle');
+    const transText = document.getElementById('transcriptionText');
+
+    title.textContent = `Preview: ${filename}`;
+    modal.style.display = 'flex';
+
+    // Clear previous
+    transText.innerHTML = 'Loading transcription...';
+
+    // Fetch file details to get URL
+    fetch('/api/recordings')
+        .then(res => res.json())
+        .then(data => {
+            const file = data.files.find(f => f.name === filename);
+            if (file) {
+                video.src = file.url;
+                video.play().catch(e => console.log('Autoplay blocked'));
+
+                if (file.hasTranscription) {
+                    loadTranscriptionForModal(filename);
+                } else {
+                    transText.innerHTML = '<div class="text-secondary p-4 text-center">No transcription available.</div>';
+                }
+            }
+        });
 }
+
+function closeModal() {
+    const modal = document.getElementById('videoModal');
+    const video = document.getElementById('videoPlayerModal');
+    if (modal) modal.style.display = 'none';
+    if (video) {
+        video.pause();
+        video.src = '';
+    }
+}
+
+async function loadTranscriptionForModal(filename) {
+    const transText = document.getElementById('transcriptionText');
+    try {
+        const res = await fetch(`/api/recordings/${filename}/transcription`);
+        const data = await res.json();
+
+        if (data.success) {
+            transText.innerHTML = '';
+            const lines = data.content.split('\n');
+            const regex = /^\[(\d{2}:\d{2}:\d{2}) -> \d{2}:\d{2}:\d{2}\] (.*)$/;
+
+            lines.forEach(line => {
+                const match = line.match(regex);
+                if (match) {
+                    const timestamp = match[1];
+                    const text = match[2];
+
+                    const row = document.createElement('div');
+                    row.className = 'transcription-row';
+
+                    const timeBtn = document.createElement('span');
+                    timeBtn.className = 'timestamp-btn';
+                    timeBtn.textContent = `[${timestamp}]`;
+                    timeBtn.onclick = () => {
+                        const parts = timestamp.split(':').map(Number);
+                        const seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                        document.getElementById('videoPlayerModal').currentTime = seconds;
+                    };
+
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = text;
+
+                    row.appendChild(timeBtn);
+                    row.appendChild(textSpan);
+                    transText.appendChild(row);
+                }
+            });
+        } else {
+            transText.innerHTML = 'Failed to load transcription.';
+        }
+    } catch (e) {
+        transText.innerHTML = 'Error loading transcription.';
+    }
+}
+
+// Close modal on click outside
+window.onclick = function (event) {
+    const modal = document.getElementById('videoModal');
+    if (event.target == modal) {
+        closeModal();
+    }
+};
 
 function formatDisplayName(filename) {
     // New format: recording_YYYY-MM-DD_HH-MM-SS.ext
