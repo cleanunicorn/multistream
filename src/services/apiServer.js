@@ -132,10 +132,22 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
   app.get('/api/streams', (req, res) => {
     const activeStreams = streamManager ? streamManager.getActiveStreams() : [];
     const srtActive = srtServer ? srtServer.isStreaming : false;
+    const srtPlatforms = srtServer ? srtServer.getActivePlatforms() : [];
+
+    // Merge SRT platforms into active streams if SRT is active
+    if (srtActive && srtPlatforms.length > 0) {
+      // Find if there's already an 'srt' entry or just add it
+      activeStreams.push({
+        key: 'SRT Input',
+        platforms: srtPlatforms
+      });
+    }
+
     res.json({
       streams: activeStreams,
       isActive: activeStreams.length > 0 || srtActive,
       srtActive,
+      srtPlatforms
     });
   });
 
@@ -217,8 +229,9 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       videoFiles = [videoFiles];
     }
 
-    const recPath = config.recording && config.recording.path ?
-      path.resolve(process.cwd(), config.recording.path) :
+    const currentConfig = loadConfig();
+    const recPath = currentConfig.recording && currentConfig.recording.path ?
+      path.resolve(process.cwd(), currentConfig.recording.path) :
       path.join(process.cwd(), 'recordings');
 
     // Create directory if not exists
@@ -485,8 +498,12 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
   });
 
   // Serve recordings static files
-  const recordingPath = config.recording && config.recording.path ?
-    path.resolve(process.cwd(), config.recording.path) :
+  // Note: static middleware is set up once at startup.
+  // If recording path changes, a full server restart or a dynamic static middleware would be needed.
+  // For now, we use the path from startup config for the static mount.
+  const startupConfig = loadConfig();
+  const recordingPath = startupConfig.recording && startupConfig.recording.path ?
+    path.resolve(process.cwd(), startupConfig.recording.path) :
     path.join(process.cwd(), 'recordings');
 
   if (!fs.existsSync(recordingPath)) {
@@ -498,8 +515,9 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
   // Get list of recordings
   app.get('/api/recordings', (req, res) => {
     try {
-      const recPath = config.recording && config.recording.path ?
-        path.resolve(process.cwd(), config.recording.path) :
+      const currentConfig = loadConfig();
+      const recPath = currentConfig.recording && currentConfig.recording.path ?
+        path.resolve(process.cwd(), currentConfig.recording.path) :
         path.join(process.cwd(), 'recordings');
 
       if (!fs.existsSync(recPath)) {
@@ -553,8 +571,9 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
         return res.status(400).json({ error: 'Invalid filename' });
       }
 
-      const recPath = config.recording && config.recording.path ?
-        path.resolve(process.cwd(), config.recording.path) :
+      const currentConfig = loadConfig();
+      const recPath = currentConfig.recording && currentConfig.recording.path ?
+        path.resolve(process.cwd(), currentConfig.recording.path) :
         path.join(process.cwd(), 'recordings');
 
       const filePath = path.join(recPath, filename);
@@ -590,8 +609,9 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       return res.status(400).json({ error: 'Invalid filename' });
     }
 
-    const recPath = config.recording && config.recording.path ?
-      path.resolve(process.cwd(), config.recording.path) :
+    const currentConfig = loadConfig();
+    const recPath = currentConfig.recording && currentConfig.recording.path ?
+      path.resolve(process.cwd(), currentConfig.recording.path) :
       path.join(process.cwd(), 'recordings');
 
     const filePath = path.join(recPath, filename);
@@ -623,8 +643,9 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       return res.status(400).json({ error: 'Invalid filename' });
     }
 
-    const recPath = config.recording && config.recording.path ?
-      path.resolve(process.cwd(), config.recording.path) :
+    const currentConfig = loadConfig();
+    const recPath = currentConfig.recording && currentConfig.recording.path ?
+      path.resolve(process.cwd(), currentConfig.recording.path) :
       path.join(process.cwd(), 'recordings');
 
     // Filename here is the video filename, so we need to change extension
@@ -675,8 +696,9 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       return res.status(400).json({ error: 'Invalid filename' });
     }
 
-    const recPath = config.recording && config.recording.path ?
-      path.resolve(process.cwd(), config.recording.path) :
+    const currentConfig = loadConfig();
+    const recPath = currentConfig.recording && currentConfig.recording.path ?
+      path.resolve(process.cwd(), currentConfig.recording.path) :
       path.join(process.cwd(), 'recordings');
 
     const clipsPath = path.join(recPath, 'clips');
