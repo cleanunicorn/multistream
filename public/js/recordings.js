@@ -171,68 +171,90 @@ function performUpload(files) {
 }
 
 const processingFiles = new Set();
+let allFiles = [];
 
 async function loadFiles() {
     try {
         const response = await fetch('/api/recordings');
         const data = await response.json();
-
-        const listDiv = document.getElementById('fileList');
-
-        if (data.files.length === 0) {
-            listDiv.innerHTML = '<div class="empty-state">No recordings found</div>';
-            return;
-        }
-
-        let html = `
-            <div class="table-container">
-            <table class="table">
-                <thead>
-                <tr>
-                    <th>Filename</th>
-                    <th>Date</th>
-                    <th>Size</th>
-                    <th>Actions</th>
-                </tr>
-                </thead>
-                <tbody>
-                `;
-
-        data.files.forEach(file => {
-            const date = new Date(file.created).toLocaleString();
-            const size = formatSize(file.size);
-
-            if (file.hasTranscription && processingFiles.has(file.name)) {
-                processingFiles.delete(file.name);
-            }
-
-            const displayName = formatDisplayName(file.name);
-
-            // Consolidated Actions
-            html += `
-                <tr>
-                <td>${displayName}</td>
-                <td>${date}</td>
-                <td>${size}</td>
-                <td class="actions">
-                    <button onclick="openPlayer('${file.name}')" class="btn btn-primary btn-sm" title="Play & Review">▶️</button>
-                    ${!file.hasTranscription && !file.isProcessing && !processingFiles.has(file.name) ?
-                    `<button onclick="transcribe('${file.name}', this)" class="btn btn-info btn-sm" title="Transcribe">📝</button>` : ''}
-                    ${file.isProcessing || processingFiles.has(file.name) ?
-                    `<button class="btn btn-secondary btn-sm" disabled title="Processing...">⏳</button>` : ''}
-                    <a href="${file.url}" download class="btn btn-secondary btn-sm" title="Download">⬇️</a>
-                    <button onclick="deleteRecording('${file.name}')" class="btn btn-danger btn-sm" title="Delete">🗑️</button>
-                </td>
-                </tr>
-            `;
-        });
-
-        html += '</tbody></table></div>';
-        listDiv.innerHTML = html;
+        allFiles = data.files || [];
+        applyFilterAndRender();
     } catch (error) {
         document.getElementById('fileList').innerHTML = 'Error loading recordings';
         console.error(error);
     }
+}
+
+function filterFiles() {
+    applyFilterAndRender();
+}
+
+function applyFilterAndRender() {
+    const searchInput = document.getElementById('searchInput');
+    const query = searchInput ? searchInput.value.toLowerCase() : '';
+
+    const filteredFiles = allFiles.filter(file => {
+        const displayName = formatDisplayName(file.name).toLowerCase();
+        const date = new Date(file.created).toLocaleString().toLowerCase();
+        return displayName.includes(query) || date.includes(query) || file.name.toLowerCase().includes(query);
+    });
+
+    renderFiles(filteredFiles);
+}
+
+function renderFiles(files) {
+    const listDiv = document.getElementById('fileList');
+
+    if (files.length === 0) {
+        listDiv.innerHTML = '<div class="empty-state">No recordings found</div>';
+        return;
+    }
+
+    let html = `
+        <div class="table-container">
+        <table class="table">
+            <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Date</th>
+                <th>Size</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            `;
+
+    files.forEach(file => {
+        const date = new Date(file.created).toLocaleString();
+        const size = formatSize(file.size);
+
+        if (file.hasTranscription && processingFiles.has(file.name)) {
+            processingFiles.delete(file.name);
+        }
+
+        const displayName = formatDisplayName(file.name);
+
+        // Consolidated Actions
+        html += `
+            <tr>
+            <td>${displayName}</td>
+            <td>${date}</td>
+            <td>${size}</td>
+            <td class="actions">
+                <button onclick="openPlayer('${file.name}')" class="btn btn-primary btn-sm" title="Play & Review">▶️</button>
+                ${!file.hasTranscription && !file.isProcessing && !processingFiles.has(file.name) ?
+                `<button onclick="transcribe('${file.name}', this)" class="btn btn-info btn-sm" title="Transcribe">📝</button>` : ''}
+                ${file.isProcessing || processingFiles.has(file.name) ?
+                `<button class="btn btn-secondary btn-sm" disabled title="Processing...">⏳</button>` : ''}
+                <a href="${file.url}" download class="btn btn-secondary btn-sm" title="Download">⬇️</a>
+                <button onclick="deleteRecording('${file.name}')" class="btn btn-danger btn-sm" title="Delete">🗑️</button>
+            </td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table></div>';
+    listDiv.innerHTML = html;
 }
 
 async function deleteRecording(filename) {
@@ -290,12 +312,51 @@ function openPlayer(filename) {
     const video = document.getElementById('videoPlayerModal');
     const title = document.getElementById('modalTitle');
     const transText = document.getElementById('transcriptionText');
+    const highlightsList = document.getElementById('highlightsList');
 
     title.textContent = `Preview: ${filename}`;
     modal.style.display = 'flex';
 
     // Clear previous
     transText.innerHTML = 'Loading transcription...';
+    if (highlightsList) {
+        highlightsList.innerHTML = '';
+        highlightsList.style.display = 'none';
+    }
+
+    // Remove any existing listener to avoid duplicates
+    if (video._timeUpdateHandler) {
+        video.removeEventListener('timeupdate', video._timeUpdateHandler);
+    }
+
+    // Add timeupdate listener for highlighting and auto-scroll
+    video._timeUpdateHandler = () => {
+        const currentTime = video.currentTime;
+        const rows = transText.querySelectorAll('.transcription-row');
+        let activeRow = null;
+
+        rows.forEach(row => {
+            const start = parseFloat(row.dataset.start);
+            const end = parseFloat(row.dataset.end);
+
+            if (currentTime >= start && currentTime <= end) {
+                row.classList.add('active-transcript-line');
+                activeRow = row;
+            } else {
+                row.classList.remove('active-transcript-line');
+            }
+        });
+
+        if (activeRow) {
+            const containerRect = transText.getBoundingClientRect();
+            const rowRect = activeRow.getBoundingClientRect();
+
+            if (rowRect.top < containerRect.top || rowRect.bottom > containerRect.bottom) {
+                activeRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    };
+    video.addEventListener('timeupdate', video._timeUpdateHandler);
 
     // Fetch file details to get URL
     fetch('/api/recordings')
@@ -322,11 +383,17 @@ function closeModal() {
     if (video) {
         video.pause();
         video.src = '';
+        if (video._timeUpdateHandler) {
+            video.removeEventListener('timeupdate', video._timeUpdateHandler);
+            video._timeUpdateHandler = null;
+        }
     }
 }
 
 async function loadTranscriptionForModal(filename) {
     const transText = document.getElementById('transcriptionText');
+    const highlightsList = document.getElementById('highlightsList');
+
     try {
         const res = await fetch(`/api/recordings/${filename}/transcription`);
         const data = await res.json();
@@ -334,24 +401,31 @@ async function loadTranscriptionForModal(filename) {
         if (data.success) {
             transText.innerHTML = '';
             const lines = data.content.split('\n');
-            const regex = /^\[(\d{2}:\d{2}:\d{2}) -> \d{2}:\d{2}:\d{2}\] (.*)$/;
+            const regex = /^\[(\d{2}:\d{2}:\d{2}) -> (\d{2}:\d{2}:\d{2})\] (.*)$/;
 
             lines.forEach(line => {
                 const match = line.match(regex);
                 if (match) {
-                    const timestamp = match[1];
-                    const text = match[2];
+                    const startStr = match[1];
+                    const endStr = match[2];
+                    const text = match[3];
+
+                    const startParts = startStr.split(':').map(Number);
+                    const startSeconds = startParts[0] * 3600 + startParts[1] * 60 + startParts[2];
+
+                    const endParts = endStr.split(':').map(Number);
+                    const endSeconds = endParts[0] * 3600 + endParts[1] * 60 + endParts[2];
 
                     const row = document.createElement('div');
                     row.className = 'transcription-row';
+                    row.dataset.start = startSeconds;
+                    row.dataset.end = endSeconds;
 
                     const timeBtn = document.createElement('span');
                     timeBtn.className = 'timestamp-btn';
-                    timeBtn.textContent = `[${timestamp}]`;
+                    timeBtn.textContent = `[${startStr}]`;
                     timeBtn.onclick = () => {
-                        const parts = timestamp.split(':').map(Number);
-                        const seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-                        document.getElementById('videoPlayerModal').currentTime = seconds;
+                        document.getElementById('videoPlayerModal').currentTime = startSeconds;
                     };
 
                     const textSpan = document.createElement('span');
@@ -362,10 +436,39 @@ async function loadTranscriptionForModal(filename) {
                     transText.appendChild(row);
                 }
             });
+
+            // Handle Highlights
+            if (data.highlights && data.highlights.length > 0) {
+                highlightsList.innerHTML = '<h5 class="mb-2 text-warning">⭐ Highlights</h5>';
+                data.highlights.forEach(h => {
+                    const hDiv = document.createElement('div');
+                    hDiv.className = 'highlight-item';
+
+                    const hTime = document.createElement('span');
+                    hTime.className = 'highlight-time';
+                    hTime.style.cursor = 'pointer';
+                    hTime.textContent = `[${h.timestamp}] `;
+                    hTime.onclick = () => {
+                        const parts = h.timestamp.split(':').map(Number);
+                        const seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                        document.getElementById('videoPlayerModal').currentTime = seconds;
+                    };
+
+                    const hText = document.createElement('span');
+                    hText.className = 'text-sm text-secondary';
+                    hText.textContent = h.text;
+
+                    hDiv.appendChild(hTime);
+                    hDiv.appendChild(hText);
+                    highlightsList.appendChild(hDiv);
+                });
+                highlightsList.style.display = 'block';
+            }
         } else {
             transText.innerHTML = 'Failed to load transcription.';
         }
     } catch (e) {
+        console.error('Error loading transcription:', e);
         transText.innerHTML = 'Error loading transcription.';
     }
 }

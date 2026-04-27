@@ -53,6 +53,15 @@
     </div>
 
     <div class="card">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="mb-0">Recording List</h2>
+            <div class="flex items-center gap-2" style="width: 300px;">
+                <span class="text-secondary">🔍</span>
+                <input type="text" id="searchInput" placeholder="Search by name or date..."
+                       class="bg-surface-hover border border-color rounded p-2 text-sm w-full"
+                       onkeyup="filterFiles()">
+            </div>
+        </div>
         <div id="fileList">Loading recordings...</div>
     </div>
 
