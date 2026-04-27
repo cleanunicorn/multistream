@@ -29,7 +29,7 @@ export function transcribeFile(videoPath, callback) {
 
     logger.info(`Starting transcription with Parakeet: ${command}`);
 
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
         if (error) {
             logger.error(`Transcription error for ${videoPath}:`, error);
 
