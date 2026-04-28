@@ -323,6 +323,80 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
     }
   });
 
+  // Bulk update configuration
+  app.put('/api/config/bulk', async (req, res) => {
+    try {
+      const { platforms, server, transcription } = req.body;
+
+      const configPath = path.join(process.cwd(), 'config.yaml');
+      const configContent = fs.readFileSync(configPath, 'utf8');
+      const yamlConfig = yaml.parse(configContent);
+
+      // Helper to coerce values
+      const coerce = (val) => {
+        if (val === 'true' || val === true) return true;
+        if (val === 'false' || val === false) return false;
+        if (typeof val === 'string' && val.trim() !== '' && !isNaN(Number(val))) return Number(val);
+        return val;
+      };
+
+      // Update platforms
+      if (platforms) {
+        for (const [name, data] of Object.entries(platforms)) {
+          if (name === 'recording') {
+            if (!yamlConfig.recording) yamlConfig.recording = {};
+            if (data.settings?.path !== undefined) yamlConfig.recording.path = data.settings.path;
+            if (data.settings?.format !== undefined) yamlConfig.recording.format = data.settings.format;
+            if (data.enabled !== undefined) yamlConfig.recording.enabled = data.enabled;
+          } else {
+            if (!yamlConfig.platforms) yamlConfig.platforms = {};
+            if (!yamlConfig.platforms[name]) yamlConfig.platforms[name] = {};
+
+            if (data.rtmpUrl !== undefined) yamlConfig.platforms[name].rtmpUrl = data.rtmpUrl;
+            if (data.streamKey !== undefined) yamlConfig.platforms[name].streamKey = data.streamKey;
+            if (data.enabled !== undefined) yamlConfig.platforms[name].enabled = data.enabled;
+            if (data.test_mode !== undefined) yamlConfig.platforms[name].test_mode = data.test_mode;
+
+            if (data.settings !== undefined) {
+              if (!yamlConfig.platforms[name].settings) yamlConfig.platforms[name].settings = {};
+              const coerced = {};
+              for (const [k, v] of Object.entries(data.settings)) {
+                coerced[k] = coerce(v);
+              }
+              Object.assign(yamlConfig.platforms[name].settings, coerced);
+            }
+          }
+        }
+      }
+
+      // Update server
+      if (server) {
+        if (!yamlConfig.server) yamlConfig.server = {};
+        for (const [k, v] of Object.entries(server)) {
+          yamlConfig.server[k] = coerce(v);
+        }
+      }
+
+      // Update transcription
+      if (transcription) {
+        if (!yamlConfig.transcription) yamlConfig.transcription = {};
+        for (const [k, v] of Object.entries(transcription)) {
+          yamlConfig.transcription[k] = coerce(v);
+        }
+      }
+
+      const updatedYaml = yaml.stringify(yamlConfig, { indent: 2, lineWidth: 0 });
+      fs.writeFileSync(configPath, updatedYaml);
+
+      reloadAndNotify();
+      logger.info('Bulk configuration update successful');
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('Failed to update bulk config:', error);
+      res.status(500).json({ error: 'Failed to update configuration', details: error.message });
+    }
+  });
+
   // Update global configuration (server, transcription)
   app.put('/api/config/global', async (req, res) => {
     try {
