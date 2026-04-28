@@ -521,6 +521,18 @@ input:focus+.toggle-slider {
     border: 1px solid var(--border-color);
 }
 
+.border-color {
+    border-color: var(--border-color);
+}
+
+.border-accent-warning {
+    border-color: var(--accent-warning) !important;
+}
+
+.text-accent-warning {
+    color: var(--accent-warning);
+}
+
 .text-center {
     text-align: center;
 }
