@@ -334,9 +334,9 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
 
       // Helper to coerce values
       const coerce = (val) => {
-        if (val === 'true') return true;
-        if (val === 'false') return false;
-        if (typeof val === 'string' && val !== '' && !isNaN(Number(val)) && !isNaN(parseFloat(val))) return Number(val);
+        if (val === 'true' || val === true) return true;
+        if (val === 'false' || val === false) return false;
+        if (typeof val === 'string' && val.trim() !== '' && !isNaN(Number(val))) return Number(val);
         return val;
       };
 

@@ -318,14 +318,29 @@ function updateConfigDisplay(config) {
             <div class="card p-4">
                 <h5 class="mb-2 font-bold">Server</h5>
                 <div class="flex flex-col gap-2 text-sm">
-                    ${Object.entries(config.server).map(([k, v]) => `
-                        <div class="flex justify-between items-center border-b border-color pb-1 last:border-0">
-                            <span class="text-muted">${k}</span>
-                            <input type="number" value="${getVal(k, v)}" id="server-${k}"
-                                   oninput="updateDraftGlobal('server', '${k}', this.value)"
-                                   class="bg-surface-hover border ${isModified(k) ? 'border-accent-warning' : 'border-color'} rounded p-1 font-mono" style="width: 110px; text-align: right; font-size: 0.85em;">
-                        </div>
-                    `).join('')}
+                    ${Object.entries(config.server).map(([k, v]) => {
+            const val = getVal(k, v);
+            if (typeof v === 'boolean') {
+                return `
+                                <div class="flex justify-between items-center border-b border-color pb-1 last:border-0">
+                                    <span class="text-muted ${isModified(k) ? 'text-accent-warning font-bold' : ''}">${k}</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="server-${k}" ${val ? 'checked' : ''}
+                                               onchange="updateDraftGlobal('server', '${k}', this.checked)">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            `;
+            }
+            return `
+                            <div class="flex justify-between items-center border-b border-color pb-1 last:border-0">
+                                <span class="text-muted">${k}</span>
+                                <input type="number" value="${val}" id="server-${k}"
+                                       oninput="updateDraftGlobal('server', '${k}', this.value)"
+                                       class="bg-surface-hover border ${isModified(k) ? 'border-accent-warning' : 'border-color'} rounded p-1 font-mono" style="width: 110px; text-align: right; font-size: 0.85em;">
+                            </div>
+                        `;
+        }).join('')}
                 </div>
             </div>
         `;
@@ -473,6 +488,13 @@ function updateUnsavedChangesBar() {
                 `;
                 document.head.appendChild(style);
             }
+        } else {
+            // Re-enable button if it was in saving state
+            const btn = bar.querySelector('.btn-primary');
+            if (btn && btn.disabled && btn.textContent === 'Saving...') {
+                btn.disabled = false;
+                btn.textContent = 'Save All Changes';
+            }
         }
     } else if (bar) {
         bar.remove();
@@ -483,8 +505,10 @@ async function saveBulkConfig() {
     const bar = document.getElementById('unsavedChangesBar');
     if (bar) {
         const btn = bar.querySelector('.btn-primary');
-        btn.disabled = true;
-        btn.textContent = 'Saving...';
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+        }
     }
 
     try {
@@ -493,16 +517,25 @@ async function saveBulkConfig() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(draftConfig)
         });
-        const result = await response.json();
-        if (result.success) {
+
+        let result;
+        try {
+            result = await response.json();
+        } catch (e) {
+            result = { error: 'Invalid server response' };
+        }
+
+        if (response.ok && result.success) {
             UI.showToast('All changes saved successfully', 'success');
             draftConfig = { platforms: {}, server: {}, transcription: {} };
             loadStatus(); // Refresh everything
         } else {
-            UI.showToast('Failed to save: ' + (result.error || 'unknown error'), 'error');
+            const errorMsg = result.details ? `${result.error}: ${result.details}` : (result.error || 'unknown error');
+            UI.showToast('Failed to save: ' + errorMsg, 'error');
         }
     } catch (error) {
-        UI.showToast('Error saving settings', 'error');
+        console.error('Save error:', error);
+        UI.showToast('Error saving settings: ' + error.message, 'error');
     } finally {
         updateUnsavedChangesBar();
     }
