@@ -90,6 +90,13 @@
                         <div
                             style="display: flex; gap: 10px; background: var(--bg-body); padding: 5px; border-radius: 4px;">
                             <button class="btn btn-sm btn-primary" style="flex: 1;">Transcript</button>
+                            <button class="btn btn-sm btn-secondary" onclick="copyTranscription()" title="Copy to clipboard">📋 Copy</button>
+                        </div>
+                        <div class="flex items-center gap-2 p-1 bg-surface-hover rounded border border-color">
+                            <span class="text-secondary ml-2">🔍</span>
+                            <input type="text" id="transcriptionSearch" placeholder="Search transcript..."
+                                   class="bg-transparent border-none p-1 text-sm w-full outline-none"
+                                   onkeyup="filterTranscription()">
                         </div>
                         <div id="transcriptionText" class="transcription-text"
                             style="flex: 1; background: var(--bg-body); border: 1px solid var(--border-color); padding: 10px;">

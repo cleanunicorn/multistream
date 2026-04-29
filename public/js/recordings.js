@@ -280,6 +280,13 @@ async function deleteRecording(filename) {
 }
 
 async function transcribe(filename, btn) {
+    const file = allFiles.find(f => f.name === filename);
+    if (file && file.hasTranscription) {
+        if (!confirm('A transcription already exists for this recording. Re-transcribe?')) {
+            return;
+        }
+    }
+
     if (btn) {
         btn.innerText = '⏳';
         btn.title = 'Processing...';
@@ -313,12 +320,14 @@ function openPlayer(filename) {
     const title = document.getElementById('modalTitle');
     const transText = document.getElementById('transcriptionText');
     const highlightsList = document.getElementById('highlightsList');
+    const searchInput = document.getElementById('transcriptionSearch');
 
     title.textContent = `Preview: ${filename}`;
     modal.style.display = 'flex';
 
     // Clear previous
     transText.innerHTML = 'Loading transcription...';
+    if (searchInput) searchInput.value = '';
     if (highlightsList) {
         highlightsList.innerHTML = '';
         highlightsList.style.display = 'none';
@@ -365,6 +374,23 @@ function openPlayer(filename) {
             const file = data.files.find(f => f.name === filename);
             if (file) {
                 video.src = file.url;
+
+                // Remove existing tracks
+                const tracks = video.querySelectorAll('track');
+                tracks.forEach(t => t.remove());
+
+                // Add VTT track if exists
+                if (file.hasVtt) {
+                    const track = document.createElement('track');
+                    track.kind = 'subtitles';
+                    track.label = 'English';
+                    track.srclang = 'en';
+                    const vttUrl = file.url.substring(0, file.url.lastIndexOf('.')) + '.vtt';
+                    track.src = vttUrl;
+                    track.default = true;
+                    video.appendChild(track);
+                }
+
                 video.play().catch(e => console.log('Autoplay blocked'));
 
                 if (file.hasTranscription) {
@@ -529,4 +555,35 @@ function formatSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+function filterTranscription() {
+    const searchInput = document.getElementById('transcriptionSearch');
+    const query = searchInput ? searchInput.value.toLowerCase() : '';
+    const rows = document.querySelectorAll('.transcription-row');
+
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        if (text.includes(query)) {
+            row.style.display = 'flex';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function copyTranscription() {
+    const rows = document.querySelectorAll('.transcription-row');
+    if (rows.length === 0) {
+        UI.showToast('No transcription to copy', 'error');
+        return;
+    }
+
+    let fullText = '';
+    rows.forEach(row => {
+        const timestamp = row.querySelector('.timestamp-btn').textContent;
+        const text = row.querySelector('span:not(.timestamp-btn)').textContent;
+        fullText += `${timestamp} ${text}\n`;
+    });
+
+    UI.copyToClipboard(fullText, 'Transcription');
+}
 
