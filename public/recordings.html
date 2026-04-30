@@ -88,8 +88,9 @@
                     <!-- Transcription / Highlights Section -->
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 300px;">
                         <div
-                            style="display: flex; gap: 10px; background: var(--bg-body); padding: 5px; border-radius: 4px;">
-                            <button class="btn btn-sm btn-primary" style="flex: 1;">Transcript</button>
+                            style="display: flex; gap: 10px; background: var(--bg-body); padding: 5px; border-radius: 4px; align-items: center; justify-content: space-between;">
+                            <span class="text-sm font-bold" style="margin-left: 5px;">Transcript</span>
+                            <button class="btn btn-sm btn-secondary" onclick="copyTranscript()" title="Copy entire transcript">📋 Copy</button>
                         </div>
                         <div id="transcriptionText" class="transcription-text"
                             style="flex: 1; background: var(--bg-body); border: 1px solid var(--border-color); padding: 10px;">

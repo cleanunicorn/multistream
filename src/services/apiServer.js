@@ -571,20 +571,19 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
     }
   });
 
-  // Serve recordings static files
-  // Note: static middleware is set up once at startup.
-  // If recording path changes, a full server restart or a dynamic static middleware would be needed.
-  // For now, we use the path from startup config for the static mount.
-  const startupConfig = loadConfig();
-  const recordingPath = startupConfig.recording && startupConfig.recording.path ?
-    path.resolve(process.cwd(), startupConfig.recording.path) :
-    path.join(process.cwd(), 'recordings');
+  // Serve recordings static files dynamically based on current configuration
+  app.use('/recordings-files', (req, res, next) => {
+    const currentConfig = loadConfig();
+    const recPath = currentConfig.recording && currentConfig.recording.path ?
+      path.resolve(process.cwd(), currentConfig.recording.path) :
+      path.join(process.cwd(), 'recordings');
 
-  if (!fs.existsSync(recordingPath)) {
-    fs.mkdirSync(recordingPath, { recursive: true });
-  }
+    if (!fs.existsSync(recPath)) {
+      return res.status(404).send('Recordings directory not found');
+    }
 
-  app.use('/recordings-files', express.static(recordingPath));
+    return express.static(recPath)(req, res, next);
+  });
 
   // Get list of recordings
   app.get('/api/recordings', (req, res) => {
@@ -613,8 +612,11 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
         })
         .map(file => {
           const stats = fs.statSync(path.join(recPath, file));
-          const txtFilename = file.substring(0, file.lastIndexOf('.')) + '.txt';
+          const baseName = file.substring(0, file.lastIndexOf('.'));
+          const txtFilename = baseName + '.txt';
+          const vttFilename = baseName + '.vtt';
           const hasTranscription = fs.existsSync(path.join(recPath, txtFilename));
+          const hasVtt = fs.existsSync(path.join(recPath, vttFilename));
           const isProcessing = fs.existsSync(path.join(recPath, txtFilename + '.tmp'));
 
           return {
@@ -623,6 +625,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
             created: stats.birthtime,
             url: `/recordings-files/${file}`,
             hasTranscription,
+            hasVtt,
             isProcessing
           };
         })
@@ -659,12 +662,21 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       fs.unlinkSync(filePath);
       logger.info(`Deleted recording: ${filename}`);
 
-      // Also delete transcription if exists
-      const txtFilename = filename.substring(0, filename.lastIndexOf('.')) + '.txt';
+      // Also delete transcription files if they exist
+      const baseName = filename.substring(0, filename.lastIndexOf('.'));
+      const txtFilename = baseName + '.txt';
+      const vttFilename = baseName + '.vtt';
+
       const txtPath = path.join(recPath, txtFilename);
       if (fs.existsSync(txtPath)) {
         fs.unlinkSync(txtPath);
         logger.info(`Deleted transcription: ${txtFilename}`);
+      }
+
+      const vttPath = path.join(recPath, vttFilename);
+      if (fs.existsSync(vttPath)) {
+        fs.unlinkSync(vttPath);
+        logger.info(`Deleted VTT: ${vttFilename}`);
       }
 
       res.json({ success: true, message: 'File deleted' });
