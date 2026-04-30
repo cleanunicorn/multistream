@@ -372,6 +372,16 @@ function openPlayer(filename) {
                 } else {
                     transText.innerHTML = '<div class="text-secondary p-4 text-center">No transcription available.</div>';
                 }
+
+                if (file.hasVtt) {
+                    const track = document.createElement('track');
+                    track.kind = 'subtitles';
+                    track.label = 'English';
+                    track.srclang = 'en';
+                    track.src = file.url.substring(0, file.url.lastIndexOf('.')) + '.vtt';
+                    track.default = true;
+                    video.appendChild(track);
+                }
             }
         });
 }
@@ -383,6 +393,12 @@ function closeModal() {
     if (video) {
         video.pause();
         video.src = '';
+
+        // Remove tracks
+        while (video.firstChild) {
+            video.removeChild(video.firstChild);
+        }
+
         if (video._timeUpdateHandler) {
             video.removeEventListener('timeupdate', video._timeUpdateHandler);
             video._timeUpdateHandler = null;
@@ -529,4 +545,26 @@ function formatSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+function copyTranscript() {
+    const transText = document.getElementById('transcriptionText');
+    if (!transText) return;
+
+    // Extract text from transcription rows if they exist, otherwise use innerText
+    const rows = transText.querySelectorAll('.transcription-row');
+    let text = '';
+
+    if (rows.length > 0) {
+        rows.forEach(row => {
+            text += row.innerText + '\n';
+        });
+    } else {
+        text = transText.innerText;
+    }
+
+    if (text && text !== 'Loading transcription...' && text !== 'No transcription available.') {
+        UI.copyToClipboard(text, 'Transcript');
+    } else {
+        UI.showToast('No transcript to copy', 'info');
+    }
+}
 
