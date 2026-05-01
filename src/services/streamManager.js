@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { transcribeFile } from '../utils/transcription.js';
+import { getRecordingPath, generateRecordingFilename, ensureRecordingDir } from '../utils/recordingUtils.js';
 
 export class StreamManager {
   constructor() {
@@ -193,17 +194,11 @@ export class StreamManager {
 
   createRecordingCommand(inputUrl, streamKey) {
     // Create recordings directory if it doesn't exist
-    const recordingPath = path.resolve(this.config.recording.path);
-    if (!fs.existsSync(recordingPath)) {
-      fs.mkdirSync(recordingPath, { recursive: true });
-      logger.info(`Created recording directory: ${recordingPath}`);
-    }
+    const recordingPath = getRecordingPath(this.config);
+    ensureRecordingDir(recordingPath);
 
     // Generate filename with timestamp (no stream key to avoid leaking API keys)
-    const now = new Date();
-    const datePart = now.toISOString().slice(0, 10); // YYYY-MM-DD
-    const timePart = now.toTimeString().slice(0, 8).replace(/:/g, '-'); // HH-MM-SS
-    const filename = `recording_${datePart}_${timePart}.${this.config.recording.format}`;
+    const filename = generateRecordingFilename(this.config.recording.format);
     const outputPath = path.join(recordingPath, filename);
 
     const command = ffmpeg(inputUrl)

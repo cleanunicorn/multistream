@@ -4,6 +4,7 @@ import path from 'path';
 import logger from '../utils/logger.js';
 import { loadConfig, configEvents } from '../config/config.js';
 import { transcribeFile } from '../utils/transcription.js';
+import { getRecordingPath, generateRecordingFilename, ensureRecordingDir } from '../utils/recordingUtils.js';
 
 /**
  * SRT input server with per-platform audio track routing.
@@ -285,16 +286,10 @@ export class SRTServer {
 
     // ── Local recording: always clean/VOD track ───────────────────────────
     if (this.config.recording?.enabled) {
-      const recordingPath = path.resolve(this.config.recording.path);
-      if (!fs.existsSync(recordingPath)) {
-        fs.mkdirSync(recordingPath, { recursive: true });
-        logger.info(`SRT: created recording directory: ${recordingPath}`);
-      }
+      const recordingPath = getRecordingPath(this.config);
+      ensureRecordingDir(recordingPath);
 
-      const now = new Date();
-      const datePart = now.toISOString().slice(0, 10);
-      const timePart = now.toTimeString().slice(0, 8).replace(/:/g, '-');
-      const filename = `recording_${datePart}_${timePart}.${this.config.recording.format}`;
+      const filename = generateRecordingFilename(this.config.recording.format);
       recordingOutputPath = path.join(recordingPath, filename);
 
       cmd
