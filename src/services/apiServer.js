@@ -571,20 +571,20 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
     }
   });
 
-  // Serve recordings static files
-  // Note: static middleware is set up once at startup.
-  // If recording path changes, a full server restart or a dynamic static middleware would be needed.
-  // For now, we use the path from startup config for the static mount.
-  const startupConfig = loadConfig();
-  const recordingPath = startupConfig.recording && startupConfig.recording.path ?
-    path.resolve(process.cwd(), startupConfig.recording.path) :
-    path.join(process.cwd(), 'recordings');
+  // Serve recordings static files using dynamic middleware to support config reloads
+  app.use('/recordings-files', (req, res, next) => {
+    const currentConfig = loadConfig();
+    const currentRecordingPath = currentConfig.recording && currentConfig.recording.path ?
+      path.resolve(process.cwd(), currentConfig.recording.path) :
+      path.join(process.cwd(), 'recordings');
 
-  if (!fs.existsSync(recordingPath)) {
-    fs.mkdirSync(recordingPath, { recursive: true });
-  }
+    // Create directory if not exists
+    if (!fs.existsSync(currentRecordingPath)) {
+      fs.mkdirSync(currentRecordingPath, { recursive: true });
+    }
 
-  app.use('/recordings-files', express.static(recordingPath));
+    return express.static(currentRecordingPath)(req, res, next);
+  });
 
   // Get list of recordings
   app.get('/api/recordings', (req, res) => {

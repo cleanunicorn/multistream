@@ -41,7 +41,7 @@ function togglePlayer(enabled) {
     }
 }
 
-function updatePlayerVisibility() {
+function updatePlayerVisibility(config = null) {
     const container = document.getElementById('playerContainer');
     const statusText = document.getElementById('playerStatusText');
     const videoWrapper = document.getElementById('videoWrapper');
@@ -52,6 +52,15 @@ function updatePlayerVisibility() {
         container.style.display = 'block';
         statusText.style.display = 'none';
         videoWrapper.classList.add('visible');
+
+        // If we have config, check if browser_debug is enabled
+        if (config && (!config.platforms.browser_debug || !config.platforms.browser_debug.enabled)) {
+            const statusEl = document.getElementById('streamStatus');
+            if (statusEl) {
+                statusEl.className = 'stream-status stream-inactive';
+                statusEl.innerHTML = '<strong>Browser Debug Platform is disabled.</strong><br><span style="font-size: 0.8em; font-weight: normal;">Enable it in Platform Status or Settings to see the stream preview.</span>';
+            }
+        }
     } else {
         container.style.display = 'none';
         statusText.style.display = 'block';
@@ -165,19 +174,24 @@ async function loadStatus() {
             });
         }
 
+        // Update player visibility and status message based on current config
+        updatePlayerVisibility(config);
+
         // Check if browser_debug is enabled AND player is locally enabled
-        // Only if playerEnabled var exists (global)
-        if (typeof playerEnabled !== 'undefined' && config.platforms.browser_debug && config.platforms.browser_debug.enabled && playerEnabled) {
+        if (playerEnabled && config.platforms.browser_debug && config.platforms.browser_debug.enabled) {
             // Only setup if we are on dashboard where player toggle exists
             if (document.getElementById('playerToggle')) {
                 setupVideoPlayer();
                 startStreamCheck();
             }
-        }
-        // Logic for stopping check if on dashboard
-        if (typeof playerEnabled !== 'undefined' && !playerEnabled && streamCheckInterval) {
+        } else if (streamCheckInterval && (!playerEnabled || !config.platforms.browser_debug || !config.platforms.browser_debug.enabled)) {
+            // Stop interval if player disabled or platform disabled
             clearInterval(streamCheckInterval);
             streamCheckInterval = null;
+            if (flvPlayer) {
+                flvPlayer.destroy();
+                flvPlayer = null;
+            }
         }
 
         // Always try to update config display (for settings page)

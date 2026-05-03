@@ -7,6 +7,9 @@ import logger from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Keep track of active transcriptions to prevent duplicates
+const activeTranscriptions = new Set();
+
 /**
  * Transcribes a video file using the NVIDIA Parakeet model via a Python script.
  * 
@@ -14,6 +17,12 @@ const __dirname = path.dirname(__filename);
  * @param {function} [callback] - Optional callback (error, stdout, stderr).
  */
 export function transcribeFile(videoPath, callback) {
+    if (activeTranscriptions.has(videoPath)) {
+        logger.warn(`Transcription already in progress for ${videoPath}. Skipping.`);
+        if (callback) callback(new Error('Transcription already in progress'));
+        return;
+    }
+
     const txtOutput = videoPath.substring(0, videoPath.lastIndexOf('.')) + '.txt';
     const tmpOutput = txtOutput + '.tmp';
     const vttOutput = videoPath.substring(0, videoPath.lastIndexOf('.')) + '.vtt';
@@ -28,8 +37,11 @@ export function transcribeFile(videoPath, callback) {
     const command = `uv run --python 3.10 --with "cmake" --with "torch" --with "torchaudio" --with "nemo_toolkit[asr]" --with "lhotse<1.27" "${pythonScript}" "${videoPath}" "${tmpOutput}" --vtt_output "${tmpVttOutput}"`;
 
     logger.info(`Starting transcription with Parakeet: ${command}`);
+    activeTranscriptions.add(videoPath);
 
     exec(command, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+        activeTranscriptions.delete(videoPath);
+
         if (error) {
             logger.error(`Transcription error for ${videoPath}:`, error);
 
