@@ -12,6 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { transcribeFile } from '../utils/transcription.js';
 import { getSystemStats, getProcessStats } from '../utils/systemStats.js';
 import fileUpload from 'express-fileupload';
+import { getRecordingPath, ensureRecordingDir } from '../utils/recordingUtils.js';
 
 let streamManager = null;
 let srtServer = null;
@@ -230,14 +231,10 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
     }
 
     const currentConfig = loadConfig();
-    const recPath = currentConfig.recording && currentConfig.recording.path ?
-      path.resolve(process.cwd(), currentConfig.recording.path) :
-      path.join(process.cwd(), 'recordings');
+    const recPath = getRecordingPath(currentConfig);
 
     // Create directory if not exists
-    if (!fs.existsSync(recPath)) {
-      fs.mkdirSync(recPath, { recursive: true });
-    }
+    ensureRecordingDir(recPath);
 
     const uploadedFiles = [];
     const errors = [];
@@ -572,27 +569,20 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
   });
 
   // Serve recordings static files
-  // Note: static middleware is set up once at startup.
-  // If recording path changes, a full server restart or a dynamic static middleware would be needed.
-  // For now, we use the path from startup config for the static mount.
-  const startupConfig = loadConfig();
-  const recordingPath = startupConfig.recording && startupConfig.recording.path ?
-    path.resolve(process.cwd(), startupConfig.recording.path) :
-    path.join(process.cwd(), 'recordings');
-
-  if (!fs.existsSync(recordingPath)) {
-    fs.mkdirSync(recordingPath, { recursive: true });
-  }
-
-  app.use('/recordings-files', express.static(recordingPath));
+  // Using dynamic middleware to resolve the recording path on every request.
+  // This allows recording path changes without a server restart.
+  app.use('/recordings-files', (req, res, next) => {
+    const currentConfig = loadConfig();
+    const recPath = getRecordingPath(currentConfig);
+    ensureRecordingDir(recPath);
+    express.static(recPath)(req, res, next);
+  });
 
   // Get list of recordings
   app.get('/api/recordings', (req, res) => {
     try {
       const currentConfig = loadConfig();
-      const recPath = currentConfig.recording && currentConfig.recording.path ?
-        path.resolve(process.cwd(), currentConfig.recording.path) :
-        path.join(process.cwd(), 'recordings');
+      const recPath = getRecordingPath(currentConfig);
 
       if (!fs.existsSync(recPath)) {
         return res.json({ files: [] });
@@ -650,9 +640,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       }
 
       const currentConfig = loadConfig();
-      const recPath = currentConfig.recording && currentConfig.recording.path ?
-        path.resolve(process.cwd(), currentConfig.recording.path) :
-        path.join(process.cwd(), 'recordings');
+      const recPath = getRecordingPath(currentConfig);
 
       const filePath = path.join(recPath, filename);
 
@@ -697,9 +685,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
     }
 
     const currentConfig = loadConfig();
-    const recPath = currentConfig.recording && currentConfig.recording.path ?
-      path.resolve(process.cwd(), currentConfig.recording.path) :
-      path.join(process.cwd(), 'recordings');
+    const recPath = getRecordingPath(currentConfig);
 
     const filePath = path.join(recPath, filename);
     const txtOutput = filePath.substring(0, filePath.lastIndexOf('.')) + '.txt';
@@ -731,9 +717,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
     }
 
     const currentConfig = loadConfig();
-    const recPath = currentConfig.recording && currentConfig.recording.path ?
-      path.resolve(process.cwd(), currentConfig.recording.path) :
-      path.join(process.cwd(), 'recordings');
+    const recPath = getRecordingPath(currentConfig);
 
     // Filename here is the video filename, so we need to change extension
     const txtFilename = filename.substring(0, filename.lastIndexOf('.')) + '.txt';
@@ -784,9 +768,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
     }
 
     const currentConfig = loadConfig();
-    const recPath = currentConfig.recording && currentConfig.recording.path ?
-      path.resolve(process.cwd(), currentConfig.recording.path) :
-      path.join(process.cwd(), 'recordings');
+    const recPath = getRecordingPath(currentConfig);
 
     const clipsPath = path.join(recPath, 'clips');
     if (!fs.existsSync(clipsPath)) {

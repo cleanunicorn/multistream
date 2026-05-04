@@ -98,7 +98,6 @@ function performUpload(files) {
 
     // Reset UI
     uploadContainer.classList.remove('hidden');
-    uploadContainer.style.display = 'block';
     statusEl.textContent = `Uploading ${files.length} file(s)...`;
     percentEl.textContent = '0%';
     progressBar.style.width = '0%';
@@ -136,7 +135,7 @@ function performUpload(files) {
                 resultEl.style.color = 'green';
 
                 setTimeout(() => {
-                    uploadContainer.style.display = 'none';
+                    uploadContainer.classList.add('hidden');
                     resultEl.textContent = '';
                     loadFiles(); // Refresh list
                 }, 2000);
@@ -508,7 +507,7 @@ window.onclick = function (event) {
 };
 
 function formatDisplayName(filename) {
-    // New format: recording_YYYY-MM-DD_HH-MM-SS.ext
+    // New format: recording_YYYY-MM-DD_HH-mm-ss.ext
     const newRegex = /recording_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})/;
     // Legacy format: stream_YYYY-MM-DDTHH-MM-SS-mmmZ
     const legacyRegex = /stream_(\d{4}-\d{2}-\d{2})T(\d{2})[-:](\d{2})[-:](\d{2})[-:](\d{3})Z/;
