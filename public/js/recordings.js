@@ -234,6 +234,9 @@ function renderFiles(files) {
         const displayName = formatDisplayName(file.name);
 
         // Consolidated Actions
+        const isProcessing = file.isProcessing || processingFiles.has(file.name);
+        const progressText = file.progress !== null && file.progress !== undefined ? ` (${file.progress}%)` : '';
+
         html += `
             <tr>
             <td>${displayName}</td>
@@ -241,10 +244,10 @@ function renderFiles(files) {
             <td>${size}</td>
             <td class="actions">
                 <button onclick="openPlayer('${file.name}')" class="btn btn-primary btn-sm" title="Play & Review">▶️</button>
-                ${!file.hasTranscription && !file.isProcessing && !processingFiles.has(file.name) ?
+                ${!file.hasTranscription && !isProcessing ?
                 `<button onclick="transcribe('${file.name}', this)" class="btn btn-info btn-sm" title="Transcribe">📝</button>` : ''}
-                ${file.isProcessing || processingFiles.has(file.name) ?
-                `<button class="btn btn-secondary btn-sm" disabled title="Processing...">⏳</button>` : ''}
+                ${isProcessing ?
+                `<button class="btn btn-secondary btn-sm" disabled title="Processing${progressText}">⏳${progressText}</button>` : ''}
                 <a href="${file.url}" download class="btn btn-secondary btn-sm" title="Download">⬇️</a>
                 <button onclick="deleteRecording('${file.name}')" class="btn btn-danger btn-sm" title="Delete">🗑️</button>
             </td>

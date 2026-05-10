@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 import yaml from 'yaml';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-import { transcribeFile } from '../utils/transcription.js';
+import { transcribeFile, getActiveTranscriptions, killTranscription } from '../utils/transcription.js';
 import { getSystemStats, getProcessStats } from '../utils/systemStats.js';
 import fileUpload from 'express-fileupload';
 import { getRecordingPath, ensureRecordingDir } from '../utils/recordingUtils.js';
@@ -588,6 +588,8 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
         return res.json({ files: [] });
       }
 
+      const activeTranscriptions = getActiveTranscriptions();
+
       const files = fs.readdirSync(recPath)
         .filter(file => {
           if (file.startsWith('.')) return false;
@@ -608,7 +610,10 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
           const vttFilename = baseName + '.vtt';
           const hasTranscription = fs.existsSync(path.join(recPath, txtFilename));
           const hasVtt = fs.existsSync(path.join(recPath, vttFilename));
-          const isProcessing = fs.existsSync(path.join(recPath, txtFilename + '.tmp'));
+
+          const activeTask = activeTranscriptions[file];
+          const isProcessing = !!activeTask || fs.existsSync(path.join(recPath, txtFilename + '.tmp'));
+          const progress = activeTask ? activeTask.progress : (isProcessing ? 0 : null);
 
           return {
             name: file,
@@ -617,7 +622,8 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
             url: `/recordings-files/${file}`,
             hasTranscription,
             hasVtt,
-            isProcessing
+            isProcessing,
+            progress
           };
         })
         .sort((a, b) => b.created - a.created); // Newest first
@@ -647,6 +653,9 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       if (!fs.existsSync(filePath)) {
         return res.status(404).json({ error: 'File not found' });
       }
+
+      // Kill transcription if active
+      killTranscription(filePath);
 
       fs.unlinkSync(filePath);
       logger.info(`Deleted recording: ${filename}`);
@@ -693,6 +702,11 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
 
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found' });
+    }
+
+    const activeTranscriptions = getActiveTranscriptions();
+    if (activeTranscriptions[filename]) {
+      return res.status(400).json({ success: false, message: 'Transcription already in progress' });
     }
 
     // Use shared transcription utility
