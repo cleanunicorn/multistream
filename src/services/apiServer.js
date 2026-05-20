@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 import yaml from 'yaml';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-import { transcribeFile } from '../utils/transcription.js';
+import { transcribeFile, getActiveTranscriptions } from '../utils/transcription.js';
 import { getSystemStats, getProcessStats } from '../utils/systemStats.js';
 import fileUpload from 'express-fileupload';
 import { getRecordingPath, ensureRecordingDir } from '../utils/recordingUtils.js';
@@ -583,6 +583,7 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
     try {
       const currentConfig = loadConfig();
       const recPath = getRecordingPath(currentConfig);
+      const activeTranscriptions = getActiveTranscriptions();
 
       if (!fs.existsSync(recPath)) {
         return res.json({ files: [] });
@@ -608,7 +609,9 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
           const vttFilename = baseName + '.vtt';
           const hasTranscription = fs.existsSync(path.join(recPath, txtFilename));
           const hasVtt = fs.existsSync(path.join(recPath, vttFilename));
-          const isProcessing = fs.existsSync(path.join(recPath, txtFilename + '.tmp'));
+          const isProcessing = fs.existsSync(path.join(recPath, txtFilename + '.tmp')) || activeTranscriptions.has(file);
+
+          const transcriptionData = activeTranscriptions.get(file);
 
           return {
             name: file,
@@ -617,7 +620,9 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
             url: `/recordings-files/${file}`,
             hasTranscription,
             hasVtt,
-            isProcessing
+            isProcessing,
+            progress: transcriptionData ? transcriptionData.progress : (isProcessing ? 0 : null),
+            status: transcriptionData ? transcriptionData.status : (isProcessing ? 'Processing...' : null)
           };
         })
         .sort((a, b) => b.created - a.created); // Newest first
@@ -637,6 +642,14 @@ export function createAPIServer(streamManagerInstance, srtServerInstance = null)
       // Basic security check to prevent directory traversal
       if (filename.includes('..') || filename.includes('/')) {
         return res.status(400).json({ error: 'Invalid filename' });
+      }
+
+      // Prevent deletion of files currently being transcribed
+      const activeTranscriptions = getActiveTranscriptions();
+      if (activeTranscriptions.has(filename)) {
+        return res.status(409).json({
+          error: 'Cannot delete file while transcription is in progress'
+        });
       }
 
       const currentConfig = loadConfig();

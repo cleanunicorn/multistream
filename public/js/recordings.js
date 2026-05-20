@@ -233,6 +233,9 @@ function renderFiles(files) {
 
         const displayName = formatDisplayName(file.name);
 
+        const isProcessing = file.isProcessing || processingFiles.has(file.name);
+        const progress = (file.progress !== null && file.progress !== undefined) ? file.progress : null;
+
         // Consolidated Actions
         html += `
             <tr>
@@ -241,12 +244,12 @@ function renderFiles(files) {
             <td>${size}</td>
             <td class="actions">
                 <button onclick="openPlayer('${file.name}')" class="btn btn-primary btn-sm" title="Play & Review">▶️</button>
-                ${!file.hasTranscription && !file.isProcessing && !processingFiles.has(file.name) ?
+                ${!file.hasTranscription && !isProcessing ?
                 `<button onclick="transcribe('${file.name}', this)" class="btn btn-info btn-sm" title="Transcribe">📝</button>` : ''}
-                ${file.isProcessing || processingFiles.has(file.name) ?
-                `<button class="btn btn-secondary btn-sm" disabled title="Processing...">⏳</button>` : ''}
+                ${isProcessing ?
+                `<button class="btn btn-secondary btn-sm" disabled title="${file.status || 'Processing...'}">⏳ ${progress !== null ? progress + '%' : ''}</button>` : ''}
                 <a href="${file.url}" download class="btn btn-secondary btn-sm" title="Download">⬇️</a>
-                <button onclick="deleteRecording('${file.name}')" class="btn btn-danger btn-sm" title="Delete">🗑️</button>
+                <button onclick="deleteRecording('${file.name}')" class="btn btn-danger btn-sm" title="Delete" ${isProcessing ? 'disabled' : ''}>🗑️</button>
             </td>
             </tr>
         `;
@@ -270,7 +273,8 @@ async function deleteRecording(filename) {
             UI.showToast('Recording deleted', 'success');
             loadFiles();
         } else {
-            UI.showToast('Failed to delete file', 'error');
+            const error = await response.json();
+            UI.showToast('Failed to delete file: ' + (error.error || 'Unknown error'), 'error');
         }
     } catch (error) {
         console.error('Error deleting file:', error);
@@ -585,4 +589,3 @@ function copyTranscription() {
 
     UI.copyToClipboard(fullText, 'Transcription');
 }
-
